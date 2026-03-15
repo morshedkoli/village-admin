@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1F7A5A"/>
+      <stop offset="100%" style="stop-color:#165a42"/>
+    </linearGradient>
+  </defs>
+  <rect width="32" height="32" rx="7" fill="url(#bg)"/>
+  <!-- Simplified tree -->
+  <ellipse cx="16" cy="12" rx="8" ry="7" fill="#fff"/>
+  <rect x="14" y="17" width="4" height="6" rx="1.5" fill="#fff" opacity="0.9"/>
+  <!-- Checkmark -->
+  <path d="M12.5,12.5 L15,15 L20,9" stroke="#1F7A5A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <!-- Ground -->
+  <rect x="4" y="25" width="24" height="1.5" rx="0.75" fill="#fff" opacity="0.4"/>
+</svg>
