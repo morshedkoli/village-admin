@@ -23,6 +23,7 @@ import {
   CreditCard,
   Smartphone,
   Landmark,
+  Bell,
 } from "lucide-react";
 
 export default function SettingsPage() {
@@ -122,7 +123,7 @@ export default function SettingsPage() {
     }
   };
 
-  const stats = overview
+  const stats= overview
     ? [
         {
           label: "Total Fund Collected",
@@ -367,6 +368,31 @@ export default function SettingsPage() {
                 </p>
               )}
             </form>
+          </div>
+
+          {/* OneSignal Push Notifications */}
+          <div className="bg-white rounded-2xl border border-border p-6">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-10 h-10 rounded-xl bg-[#E8F5FF] flex items-center justify-center">
+                <Bell className="w-5 h-5 text-[#0073E6]" />
+              </div>
+              <div>
+                <h2 className="text-base font-semibold text-text-primary">
+                  Push Notifications (OneSignal)
+                </h2>
+                <p className="text-xs text-text-muted">
+                  OneSignal credentials are configured via server environment variables
+                </p>
+              </div>
+            </div>
+            <div className="bg-background rounded-xl p-4 text-sm text-text-secondary space-y-2">
+              <p>
+                Push notification credentials are now managed server-side via <code className="bg-border/50 px-1.5 py-0.5 rounded text-xs font-mono">.env.local</code> for security.
+              </p>
+              <p className="text-xs text-text-muted">
+                Set <code className="font-mono">ONESIGNAL_APP_ID</code> and <code className="font-mono">ONESIGNAL_API_KEY</code> in your environment variables.
+              </p>
+            </div>
           </div>
 
           {/* Village Statistics */}

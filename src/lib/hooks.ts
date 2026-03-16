@@ -8,6 +8,7 @@ import {
   subscribeProblems,
   subscribeUsers,
   subscribeNotifications,
+  subscribeUserNotifications,
   subscribePaymentAccounts,
 } from "./firestore-service";
 import type {
@@ -101,6 +102,21 @@ export function useNotifications() {
 
   useEffect(() => {
     const unsub = subscribeNotifications((notifications) => {
+      setData(notifications);
+      setLoading(false);
+    });
+    return unsub;
+  }, []);
+
+  return { data, loading };
+}
+
+export function useUserNotifications() {
+  const [data, setData] = useState<AppNotification[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const unsub = subscribeUserNotifications((notifications) => {
       setData(notifications);
       setLoading(false);
     });

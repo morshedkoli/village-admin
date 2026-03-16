@@ -14,6 +14,7 @@ import { EmptyState } from "@/components/EmptyState";
 import { relativeTime } from "@/lib/utils";
 import type { AppNotification } from "@/lib/models";
 import { Megaphone, Plus, Trash2, Send } from "lucide-react";
+import { sendPushNotification } from "@/lib/onesignal";
 
 type NotificationType = AppNotification["type"];
 
@@ -27,16 +28,29 @@ export default function NotificationsPage() {
     type: "donation" as NotificationType,
   });
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
 
   if (loading) return <LoadingSkeleton />;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
+    setError(null);
+    setSuccess(false);
     try {
       await createNotification(form);
+      const pushResult = await sendPushNotification({ title: form.title, body: form.body, type: form.type });
+      if (!pushResult.success) {
+        setError(`Notification saved but push failed: ${pushResult.error}`);
+      } else {
+        setSuccess(true);
+        setTimeout(() => setSuccess(false), 3000);
+      }
       setFormOpen(false);
       setForm({ title: "", body: "", type: "donation" });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to create notification");
     } finally {
       setSaving(false);
     }
@@ -59,6 +73,18 @@ export default function NotificationsPage() {
           New Notification
         </button>
       </div>
+
+      {/* Status Messages */}
+      {error && (
+        <div className="bg-danger-light border border-danger/20 text-danger rounded-xl px-4 py-3 text-sm animate-fade-in">
+          {error}
+        </div>
+      )}
+      {success && (
+        <div className="bg-green-50 border border-green-200 text-green-700 rounded-xl px-4 py-3 text-sm animate-fade-in">
+          Notification sent successfully!
+        </div>
+      )}
 
       {/* Notification Composer */}
       <div className="bg-white rounded-2xl border border-border p-6 animate-fade-in">
@@ -124,6 +150,15 @@ export default function NotificationsPage() {
                 className="flex items-center gap-4 px-5 py-4 hover:bg-surface-hover/50 transition-colors"
               >
                 <StatusBadge status={notification.type} />
+                <span
+                  className={`text-[10px] font-semibold px-2 py-0.5 rounded-lg ${
+                    notification.source === "admin"
+                      ? "bg-secondary-light text-secondary"
+                      : "bg-info-light text-info"
+                  }`}
+                >
+                  {notification.source === "admin" ? "Admin" : "User"}
+                </span>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-text-primary">
                     {notification.title}

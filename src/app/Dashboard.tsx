@@ -84,7 +84,10 @@ export default function Dashboard() {
 
   const activeProjects = projects.filter((p) => p.status !== "Completed").length;
   const pendingProblems = problems.filter((p) => p.status === "Pending").length;
-  const recentDonations = donations.slice(0, 6);
+  const recentDonations = donations
+    .filter((d) => d.status === "Approved")
+    .slice(0, 6);
+  const pendingDonationCount = donations.filter((d) => d.status === "Pending").length;
   const recentNotifications = notifications.slice(0, 5);
 
   return (
@@ -237,7 +240,14 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-white rounded-2xl border border-border p-6 animate-fade-in">
           <div className="flex items-center justify-between mb-5">
-            <h3 className="text-base font-semibold text-text-primary">Recent Donations</h3>
+            <h3 className="text-base font-semibold text-text-primary">
+              Recent Donations
+              {pendingDonationCount > 0 && (
+                <span className="ml-2 inline-flex items-center justify-center px-2 py-0.5 rounded-full text-xs font-bold bg-warning-light text-warning">
+                  {pendingDonationCount} pending
+                </span>
+              )}
+            </h3>
             <a
               href="/donations"
               className="text-xs font-medium text-primary hover:text-primary-dark transition-colors flex items-center gap-1"

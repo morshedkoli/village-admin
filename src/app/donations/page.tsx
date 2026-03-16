@@ -13,7 +13,17 @@ import { EmptyState } from "@/components/EmptyState";
 import { StatusBadge } from "@/components/StatusBadge";
 import { ChartCard } from "@/components/ChartCard";
 import { formatBDT, formatDate } from "@/lib/utils";
-import { HandCoins, Trash2, CheckCircle, XCircle } from "lucide-react";
+import { sendPushNotification } from "@/lib/onesignal";
+import {
+  HandCoins,
+  Trash2,
+  CheckCircle,
+  XCircle,
+  Clock,
+  CircleDollarSign,
+  Ban,
+  CheckCheck,
+} from "lucide-react";
 import {
   BarChart,
   Bar,
@@ -39,9 +49,13 @@ type StatusFilter = "all" | "Pending" | "Approved" | "Rejected";
 export default function DonationsPage() {
   const { data: donations, loading } = useDonations();
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [approveId, setApproveId] = useState<string | null>(null);
+  const [rejectId, setRejectId] = useState<string | null>(null);
   const [filter, setFilter] = useState<FilterPeriod>("all");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkApproveOpen, setBulkApproveOpen] = useState(false);
 
   const filtered = useMemo(() => {
     const now = new Date();
@@ -76,7 +90,14 @@ export default function DonationsPage() {
       }));
   }, [donations]);
 
-  const pendingCount = donations.filter((d) => d.status === "Pending").length;
+  const pendingDonations = donations.filter((d) => d.status === "Pending");
+  const pendingCount = pendingDonations.length;
+  const pendingAmount = pendingDonations.reduce((s, d) => s + d.amount, 0);
+  const approvedCount = donations.filter((d) => d.status === "Approved").length;
+  const approvedAmount = donations
+    .filter((d) => d.status === "Approved")
+    .reduce((s, d) => s + d.amount, 0);
+  const rejectedCount = donations.filter((d) => d.status === "Rejected").length;
 
   if (loading) return <LoadingSkeleton />;
 
@@ -85,11 +106,20 @@ export default function DonationsPage() {
   const handleApprove = async (id: string) => {
     setActionLoading(id);
     try {
+      const donation = donations.find((d) => d.id === id);
       await approveDonation(id);
+      if (donation) {
+        await sendPushNotification({
+          title: "নতুন অনুদান",
+          body: `${donation.donorName} ৳${donation.amount} অনুদান দিয়েছেন`,
+          type: "donation",
+        });
+      }
     } catch (err) {
       console.error("Failed to approve donation:", err);
     } finally {
       setActionLoading(null);
+      setApproveId(null);
     }
   };
 
@@ -101,11 +131,59 @@ export default function DonationsPage() {
       console.error("Failed to reject donation:", err);
     } finally {
       setActionLoading(null);
+      setRejectId(null);
     }
   };
 
+  const handleBulkApprove = async () => {
+    const toApprove = pendingDonations.filter((d) => selectedIds.has(d.id));
+    for (const donation of toApprove) {
+      try {
+        await approveDonation(donation.id);
+      } catch (err) {
+        console.error("Failed to approve donation:", donation.id, err);
+      }
+    }
+    if (toApprove.length > 0) {
+      await sendPushNotification({
+        title: "নতুন অনুদান",
+        body: `${toApprove.length}টি অনুদান অনুমোদিত হয়েছে — মোট ৳${toApprove.reduce((s, d) => s + d.amount, 0)}`,
+        type: "donation",
+      });
+    }
+    setSelectedIds(new Set());
+    setBulkApproveOpen(false);
+  };
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    const pendingIds = pendingDonations.map((d) => d.id);
+    if (pendingIds.every((id) => selectedIds.has(id))) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(pendingIds));
+    }
+  };
+
+  const allPendingSelected =
+    pendingDonations.length > 0 &&
+    pendingDonations.every((d) => selectedIds.has(d.id));
+
+  const selectedAmount = pendingDonations
+    .filter((d) => selectedIds.has(d.id))
+    .reduce((s, d) => s + d.amount, 0);
+
   return (
     <div className="space-y-6">
+      {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold text-text-primary">
@@ -120,7 +198,7 @@ export default function DonationsPage() {
             {filtered.length} donations &middot; Total: {formatBDT(totalAmount)}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <div className="flex items-center gap-1 bg-background rounded-xl p-1">
             {(["all", "Pending", "Approved", "Rejected"] as StatusFilter[]).map(
               (s) => (
@@ -162,6 +240,199 @@ export default function DonationsPage() {
         </div>
       </div>
 
+      {/* Summary Stats */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="bg-white rounded-2xl border border-border p-5 flex items-center gap-4">
+          <div className="w-11 h-11 rounded-xl bg-warning-light flex items-center justify-center">
+            <Clock className="w-5 h-5 text-warning" />
+          </div>
+          <div>
+            <p className="text-xs font-medium text-text-muted uppercase tracking-wider">
+              Pending
+            </p>
+            <p className="text-lg font-bold text-text-primary">
+              {pendingCount}
+            </p>
+            <p className="text-xs text-warning font-medium">
+              {formatBDT(pendingAmount)}
+            </p>
+          </div>
+        </div>
+        <div className="bg-white rounded-2xl border border-border p-5 flex items-center gap-4">
+          <div className="w-11 h-11 rounded-xl bg-success-light flex items-center justify-center">
+            <CircleDollarSign className="w-5 h-5 text-success" />
+          </div>
+          <div>
+            <p className="text-xs font-medium text-text-muted uppercase tracking-wider">
+              Approved
+            </p>
+            <p className="text-lg font-bold text-text-primary">
+              {approvedCount}
+            </p>
+            <p className="text-xs text-success font-medium">
+              {formatBDT(approvedAmount)}
+            </p>
+          </div>
+        </div>
+        <div className="bg-white rounded-2xl border border-border p-5 flex items-center gap-4">
+          <div className="w-11 h-11 rounded-xl bg-danger-light flex items-center justify-center">
+            <Ban className="w-5 h-5 text-danger" />
+          </div>
+          <div>
+            <p className="text-xs font-medium text-text-muted uppercase tracking-wider">
+              Rejected
+            </p>
+            <p className="text-lg font-bold text-text-primary">
+              {rejectedCount}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Pending Donations Section */}
+      {pendingCount > 0 && statusFilter === "all" && (
+        <div className="bg-white rounded-2xl border-2 border-warning/30 overflow-hidden animate-fade-in">
+          <div className="px-5 py-4 bg-warning-light/50 border-b border-warning/20 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Clock className="w-5 h-5 text-warning" />
+              <div>
+                <h3 className="text-sm font-semibold text-text-primary">
+                  Pending Approval ({pendingCount})
+                </h3>
+                <p className="text-xs text-text-muted">
+                  Total: {formatBDT(pendingAmount)} — Review and approve or
+                  reject donations
+                </p>
+              </div>
+            </div>
+            {selectedIds.size > 0 && (
+              <button
+                onClick={() => setBulkApproveOpen(true)}
+                className="flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-xl bg-success text-white hover:bg-success/90 transition-colors"
+              >
+                <CheckCheck className="w-4 h-4" />
+                Approve Selected ({selectedIds.size}) &middot;{" "}
+                {formatBDT(selectedAmount)}
+              </button>
+            )}
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-border bg-background/50">
+                  <th className="px-5 py-3 text-left w-10">
+                    <input
+                      type="checkbox"
+                      checked={allPendingSelected}
+                      onChange={toggleSelectAll}
+                      className="w-4 h-4 rounded border-border-light text-success focus:ring-success/30 cursor-pointer accent-[#1F7A5A]"
+                    />
+                  </th>
+                  <th className="px-5 py-3 text-left text-xs font-semibold text-text-secondary uppercase tracking-wider">
+                    Donor
+                  </th>
+                  <th className="px-5 py-3 text-left text-xs font-semibold text-text-secondary uppercase tracking-wider">
+                    Amount
+                  </th>
+                  <th className="px-5 py-3 text-left text-xs font-semibold text-text-secondary uppercase tracking-wider">
+                    Method
+                  </th>
+                  <th className="px-5 py-3 text-left text-xs font-semibold text-text-secondary uppercase tracking-wider">
+                    Transaction
+                  </th>
+                  <th className="px-5 py-3 text-left text-xs font-semibold text-text-secondary uppercase tracking-wider">
+                    Date
+                  </th>
+                  <th className="px-5 py-3 text-right text-xs font-semibold text-text-secondary uppercase tracking-wider">
+                    Actions
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border-light">
+                {pendingDonations.map((donation) => {
+                  const isLoading = actionLoading === donation.id;
+                  return (
+                    <tr
+                      key={donation.id}
+                      className={`transition-colors ${
+                        selectedIds.has(donation.id)
+                          ? "bg-success-light/30"
+                          : "hover:bg-surface-hover/50"
+                      }`}
+                    >
+                      <td className="px-5 py-3.5">
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.has(donation.id)}
+                          onChange={() => toggleSelect(donation.id)}
+                          className="w-4 h-4 rounded border-border-light text-success focus:ring-success/30 cursor-pointer accent-[#1F7A5A]"
+                        />
+                      </td>
+                      <td className="px-5 py-3.5">
+                        <p className="text-sm font-medium text-text-primary">
+                          {donation.donorName}
+                        </p>
+                        {donation.senderNumber && (
+                          <p className="text-xs text-text-muted mt-0.5">
+                            {donation.senderNumber}
+                          </p>
+                        )}
+                      </td>
+                      <td className="px-5 py-3.5">
+                        <span className="text-sm font-semibold text-warning">
+                          {formatBDT(donation.amount)}
+                        </span>
+                      </td>
+                      <td className="px-5 py-3.5">
+                        <span
+                          className={`inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold ${
+                            paymentMethodStyles[donation.paymentMethod] ??
+                            "bg-background text-text-secondary"
+                          }`}
+                        >
+                          {donation.paymentMethod}
+                        </span>
+                      </td>
+                      <td className="px-5 py-3.5">
+                        <p className="text-xs text-text-primary font-mono">
+                          {donation.transactionId || "—"}
+                        </p>
+                      </td>
+                      <td className="px-5 py-3.5 text-sm text-text-muted">
+                        {formatDate(donation.createdAt)}
+                      </td>
+                      <td className="px-5 py-3.5">
+                        <div className="flex justify-end gap-1">
+                          <button
+                            onClick={() => setApproveId(donation.id)}
+                            disabled={isLoading}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-success-light text-success hover:bg-success hover:text-white text-xs font-semibold transition-colors disabled:opacity-50"
+                            title="Approve"
+                          >
+                            <CheckCircle className="w-3.5 h-3.5" />
+                            Approve
+                          </button>
+                          <button
+                            onClick={() => setRejectId(donation.id)}
+                            disabled={isLoading}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-danger-light text-danger hover:bg-danger hover:text-white text-xs font-semibold transition-colors disabled:opacity-50"
+                            title="Reject"
+                          >
+                            <XCircle className="w-3.5 h-3.5" />
+                            Reject
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Monthly Chart */}
       {monthlyData.length > 0 && (
         <ChartCard
           title="Donation Trend"
@@ -199,7 +470,13 @@ export default function DonationsPage() {
         </ChartCard>
       )}
 
+      {/* All Donations Table */}
       <div className="bg-white rounded-2xl border border-border overflow-hidden">
+        <div className="px-5 py-4 border-b border-border">
+          <h3 className="text-sm font-semibold text-text-primary">
+            All Donations
+          </h3>
+        </div>
         {filtered.length === 0 ? (
           <EmptyState
             icon={HandCoins}
@@ -257,7 +534,15 @@ export default function DonationsPage() {
                         )}
                       </td>
                       <td className="px-5 py-4">
-                        <span className="text-sm font-semibold text-success">
+                        <span
+                          className={`text-sm font-semibold ${
+                            donation.status === "Approved"
+                              ? "text-success"
+                              : donation.status === "Pending"
+                                ? "text-warning"
+                                : "text-text-muted"
+                          }`}
+                        >
                           {formatBDT(donation.amount)}
                         </span>
                       </td>
@@ -287,7 +572,7 @@ export default function DonationsPage() {
                           {donation.status === "Pending" && (
                             <>
                               <button
-                                onClick={() => handleApprove(donation.id)}
+                                onClick={() => setApproveId(donation.id)}
                                 disabled={isLoading}
                                 className="p-2 rounded-lg hover:bg-success-light text-text-muted hover:text-success transition-colors disabled:opacity-50"
                                 title="Approve"
@@ -295,9 +580,9 @@ export default function DonationsPage() {
                                 <CheckCircle className="w-4 h-4" />
                               </button>
                               <button
-                                onClick={() => handleReject(donation.id)}
+                                onClick={() => setRejectId(donation.id)}
                                 disabled={isLoading}
-                                className="p-2 rounded-lg hover:bg-warning-light text-text-muted hover:text-warning transition-colors disabled:opacity-50"
+                                className="p-2 rounded-lg hover:bg-danger-light text-text-muted hover:text-danger transition-colors disabled:opacity-50"
                                 title="Reject"
                               >
                                 <XCircle className="w-4 h-4" />
@@ -322,6 +607,55 @@ export default function DonationsPage() {
         )}
       </div>
 
+      {/* Approve Confirmation */}
+      <ConfirmDialog
+        open={approveId !== null}
+        title="Approve Donation"
+        message={`Are you sure you want to approve this donation? This will add ${formatBDT(
+          donations.find((d) => d.id === approveId)?.amount ?? 0
+        )} from "${
+          donations.find((d) => d.id === approveId)?.donorName ?? ""
+        }" to the village fund.`}
+        variant="warning"
+        confirmLabel="Approve"
+        loadingLabel="Approving..."
+        onConfirm={async () => {
+          if (approveId) await handleApprove(approveId);
+        }}
+        onCancel={() => setApproveId(null)}
+      />
+
+      {/* Reject Confirmation */}
+      <ConfirmDialog
+        open={rejectId !== null}
+        title="Reject Donation"
+        message={`Are you sure you want to reject the donation of ${formatBDT(
+          donations.find((d) => d.id === rejectId)?.amount ?? 0
+        )} from "${
+          donations.find((d) => d.id === rejectId)?.donorName ?? ""
+        }"? This donation will be marked as rejected.`}
+        variant="danger"
+        confirmLabel="Reject"
+        loadingLabel="Rejecting..."
+        onConfirm={async () => {
+          if (rejectId) await handleReject(rejectId);
+        }}
+        onCancel={() => setRejectId(null)}
+      />
+
+      {/* Bulk Approve Confirmation */}
+      <ConfirmDialog
+        open={bulkApproveOpen}
+        title="Bulk Approve Donations"
+        message={`Are you sure you want to approve ${selectedIds.size} donation(s) totaling ${formatBDT(selectedAmount)}? This will add the full amount to the village fund.`}
+        variant="warning"
+        confirmLabel={`Approve ${selectedIds.size} Donations`}
+        loadingLabel="Approving..."
+        onConfirm={handleBulkApprove}
+        onCancel={() => setBulkApproveOpen(false)}
+      />
+
+      {/* Delete Confirmation */}
       <ConfirmDialog
         open={deleteId !== null}
         title="Delete Donation"

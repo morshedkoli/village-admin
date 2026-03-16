@@ -11,6 +11,8 @@ import {
   User,
   GoogleAuthProvider,
   signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   onAuthStateChanged,
   signOut as fbSignOut,
 } from "firebase/auth";
@@ -40,6 +42,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Handle redirect result (for when signInWithPopup fails and falls back to redirect)
+    getRedirectResult(auth).catch(() => {});
+
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
         const tokenResult = await firebaseUser.getIdTokenResult();
@@ -58,7 +63,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signIn = async () => {
     const provider = new GoogleAuthProvider();
-    await signInWithPopup(auth, provider);
+    try {
+      await signInWithPopup(auth, provider);
+    } catch (error: unknown) {
+      const code = (error as { code?: string }).code;
+      // If popup fails (blocked, closed, cross-origin issues), fall back to redirect
+      if (
+        code === "auth/popup-blocked" ||
+        code === "auth/popup-closed-by-user" ||
+        code === "auth/cancelled-popup-request" ||
+        code === "auth/internal-error" ||
+        code === "auth/web-storage-unsupported"
+      ) {
+        await signInWithRedirect(auth, provider);
+      }
+    }
   };
 
   const signOutFn = async () => {

@@ -147,6 +147,7 @@ export async function approveDonation(id: string): Promise<void> {
       title: "নতুন অনুদান",
       body: `${donorName} ৳${amount} অনুদান দিয়েছেন`,
       type: "donation",
+      source: "admin",
       createdAt: serverTimestamp(),
     });
   });
@@ -303,6 +304,7 @@ function mapNotification(id: string, d: DocumentData): AppNotification {
     title: (d.title as string) ?? "",
     body: (d.body as string) ?? "",
     type: (d.type as AppNotification["type"]) ?? "donation",
+    source: (d.source as AppNotification["source"]) ?? "user",
     createdAt: toDate(d.createdAt),
   };
 }
@@ -320,6 +322,20 @@ export function subscribeNotifications(
   });
 }
 
+export function subscribeUserNotifications(
+  callback: (notifications: AppNotification[]) => void
+): Unsubscribe {
+  const q = query(
+    collection(db, "notifications"),
+    where("source", "==", "user"),
+    orderBy("createdAt", "desc"),
+    limit(100)
+  );
+  return onSnapshot(q, (snap) => {
+    callback(snap.docs.map((doc) => mapNotification(doc.id, doc.data())));
+  });
+}
+
 export async function createNotification(data: {
   title: string;
   body: string;
@@ -327,6 +343,7 @@ export async function createNotification(data: {
 }): Promise<void> {
   await addDoc(collection(db, "notifications"), {
     ...data,
+    source: "admin",
     createdAt: serverTimestamp(),
   });
 }
