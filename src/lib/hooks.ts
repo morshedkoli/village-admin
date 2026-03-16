@@ -8,6 +8,7 @@ import {
   subscribeProblems,
   subscribeUsers,
   subscribeNotifications,
+  subscribePaymentAccounts,
 } from "./firestore-service";
 import type {
   VillageOverview,
@@ -16,6 +17,7 @@ import type {
   ProblemReport,
   Citizen,
   AppNotification,
+  PaymentAccounts,
 } from "./models";
 
 export function useVillageOverview() {
@@ -100,6 +102,21 @@ export function useNotifications() {
   useEffect(() => {
     const unsub = subscribeNotifications((notifications) => {
       setData(notifications);
+      setLoading(false);
+    });
+    return unsub;
+  }, []);
+
+  return { data, loading };
+}
+
+export function usePaymentAccounts() {
+  const [data, setData] = useState<PaymentAccounts>({});
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const unsub = subscribePaymentAccounts((accounts) => {
+      setData(accounts);
       setLoading(false);
     });
     return unsub;

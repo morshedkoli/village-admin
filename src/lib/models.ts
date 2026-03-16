@@ -16,6 +16,9 @@ export interface Donation {
   paymentMethod: string;
   createdAt: Date;
   userId: string;
+  status: "Pending" | "Approved" | "Rejected";
+  transactionId: string;
+  senderNumber: string;
 }
 
 export interface ProblemReport {
@@ -66,3 +69,12 @@ export interface AppNotification {
   type: "donation" | "problem" | "citizen" | "project";
   createdAt: Date;
 }
+
+export interface PaymentAccount {
+  number: string;
+  name: string;
+  bankName?: string;
+  branch?: string;
+}
+
+export type PaymentAccounts = Record<string, PaymentAccount>;

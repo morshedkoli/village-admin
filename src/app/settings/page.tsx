@@ -1,9 +1,10 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { useVillageOverview } from "@/lib/hooks";
-import { updateVillageOverview } from "@/lib/firestore-service";
+import { useVillageOverview, usePaymentAccounts } from "@/lib/hooks";
+import { updateVillageOverview, updatePaymentAccounts } from "@/lib/firestore-service";
 import { availableBalance } from "@/lib/models";
+import type { PaymentAccounts as PaymentAccountsType } from "@/lib/models";
 import { formatBDT } from "@/lib/utils";
 import { LoadingSkeleton } from "@/components/LoadingSkeleton";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
@@ -19,10 +20,14 @@ import {
   Shield,
   Mail,
   User as UserIcon,
+  CreditCard,
+  Smartphone,
+  Landmark,
 } from "lucide-react";
 
 export default function SettingsPage() {
   const { data: overview, loading } = useVillageOverview();
+  const { data: paymentAccounts, loading: paLoading } = usePaymentAccounts();
   const { user } = useAuth();
   const [villageName, setVillageName] = useState("");
   const [saving, setSaving] = useState(false);
@@ -30,9 +35,33 @@ export default function SettingsPage() {
   const [showConfirm, setShowConfirm] = useState(false);
   const [error, setError] = useState("");
 
+  // Payment accounts state
+  const [accounts, setAccounts] = useState<PaymentAccountsType>({
+    bKash: { number: "", name: "" },
+    Nagad: { number: "", name: "" },
+    Rocket: { number: "", name: "" },
+    Bank: { number: "", name: "", bankName: "", branch: "" },
+  });
+  const [paSaving, setPaSaving] = useState(false);
+  const [paSaved, setPaSaved] = useState(false);
+  const [paError, setPaError] = useState("");
+  const [paLoaded, setPaLoaded] = useState(false);
+
   useEffect(() => {
     if (overview) setVillageName(overview.name);
   }, [overview]);
+
+  useEffect(() => {
+    if (!paLoaded && !paLoading) {
+      setAccounts({
+        bKash: paymentAccounts.bKash ?? { number: "", name: "" },
+        Nagad: paymentAccounts.Nagad ?? { number: "", name: "" },
+        Rocket: paymentAccounts.Rocket ?? { number: "", name: "" },
+        Bank: paymentAccounts.Bank ?? { number: "", name: "", bankName: "", branch: "" },
+      });
+      setPaLoaded(true);
+    }
+  }, [paymentAccounts, paLoading, paLoaded]);
 
   if (loading) return <LoadingSkeleton />;
 
@@ -62,6 +91,34 @@ export default function SettingsPage() {
     } finally {
       setSaving(false);
       setShowConfirm(false);
+    }
+  };
+
+  const updateAccount = (
+    provider: string,
+    field: "number" | "name" | "bankName" | "branch",
+    value: string
+  ) => {
+    setAccounts((prev) => ({
+      ...prev,
+      [provider]: { ...prev[provider], [field]: value },
+    }));
+  };
+
+  const handleSaveAccounts = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPaSaving(true);
+    setPaError("");
+    try {
+      await updatePaymentAccounts(accounts);
+      setPaSaved(true);
+      setTimeout(() => setPaSaved(false), 2000);
+    } catch (err: unknown) {
+      const msg =
+        err instanceof Error ? err.message : "Failed to update payment accounts";
+      setPaError(msg);
+    } finally {
+      setPaSaving(false);
     }
   };
 
@@ -97,6 +154,13 @@ export default function SettingsPage() {
         },
       ]
     : [];
+
+  const paymentMethods = [
+    { key: "bKash", label: "bKash", color: "#E2136E", isBank: false },
+    { key: "Nagad", label: "Nagad", color: "#FF6A00", isBank: false },
+    { key: "Rocket", label: "Rocket", color: "#8B2FA0", isBank: false },
+    { key: "Bank", label: "Bank Account", color: "#1E40AF", isBank: true },
+  ];
 
   return (
     <div className="space-y-6">
@@ -158,6 +222,148 @@ export default function SettingsPage() {
               {error && (
                 <p className="text-sm text-danger bg-danger-light px-4 py-3 rounded-xl">
                   {error}
+                </p>
+              )}
+            </form>
+          </div>
+
+          {/* Donation Account Settings */}
+          <div className="bg-white rounded-2xl border border-border p-6">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-10 h-10 rounded-xl bg-[#FFF4E6] flex items-center justify-center">
+                <CreditCard className="w-5 h-5 text-[#FF9500]" />
+              </div>
+              <div>
+                <h2 className="text-base font-semibold text-text-primary">
+                  Donation Account Numbers
+                </h2>
+                <p className="text-xs text-text-muted">
+                  Citizens will see these accounts when donating
+                </p>
+              </div>
+            </div>
+            <form onSubmit={handleSaveAccounts} className="space-y-5">
+              {paymentMethods.map((method) => {
+                const account = accounts[method.key] ?? { number: "", name: "" };
+                const isActive = account.number.trim() !== "";
+                return (
+                  <div
+                    key={method.key}
+                    className="rounded-xl border overflow-hidden"
+                    style={{ borderColor: `${method.color}33` }}
+                  >
+                    <div
+                      className="flex items-center justify-between px-4 py-3"
+                      style={{ backgroundColor: `${method.color}0A` }}
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <div
+                          className="w-8 h-8 rounded-lg flex items-center justify-center"
+                          style={{ backgroundColor: `${method.color}1A` }}
+                        >
+                          {method.isBank ? (
+                            <Landmark className="w-4 h-4" style={{ color: method.color }} />
+                          ) : (
+                            <Smartphone className="w-4 h-4" style={{ color: method.color }} />
+                          )}
+                        </div>
+                        <span className="text-sm font-semibold" style={{ color: method.color }}>
+                          {method.label}
+                        </span>
+                      </div>
+                      <span
+                        className={`text-xs font-medium px-2 py-0.5 rounded-md ${
+                          isActive
+                            ? "bg-[#ECFDF5] text-[#059669]"
+                            : "bg-[#FEF2F2] text-[#DC2626]"
+                        }`}
+                      >
+                        {isActive ? "Active" : "Not Set"}
+                      </span>
+                    </div>
+                    <div className="p-4 space-y-3">
+                      {method.isBank && (
+                        <>
+                          <div>
+                            <label className="block text-xs font-medium text-text-muted mb-1">
+                              Bank Name
+                            </label>
+                            <input
+                              type="text"
+                              value={account.bankName ?? ""}
+                              onChange={(e) => updateAccount(method.key, "bankName", e.target.value)}
+                              placeholder="e.g. Sonali Bank, Dutch Bangla Bank"
+                              className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm text-text-primary focus:outline-none focus:ring-2 focus:border-transparent transition-all"
+                              style={{ "--tw-ring-color": `${method.color}33` } as React.CSSProperties}
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-text-muted mb-1">
+                              Branch Name
+                            </label>
+                            <input
+                              type="text"
+                              value={account.branch ?? ""}
+                              onChange={(e) => updateAccount(method.key, "branch", e.target.value)}
+                              placeholder="e.g. Main Branch, Dhaka"
+                              className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm text-text-primary focus:outline-none focus:ring-2 focus:border-transparent transition-all"
+                              style={{ "--tw-ring-color": `${method.color}33` } as React.CSSProperties}
+                            />
+                          </div>
+                        </>
+                      )}
+                      <div>
+                        <label className="block text-xs font-medium text-text-muted mb-1">
+                          Account Number
+                        </label>
+                        <input
+                          type="text"
+                          value={account.number}
+                          onChange={(e) => updateAccount(method.key, "number", e.target.value)}
+                          placeholder="e.g. 01XXXXXXXXX"
+                          className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm text-text-primary focus:outline-none focus:ring-2 focus:border-transparent transition-all"
+                          style={{ "--tw-ring-color": `${method.color}33` } as React.CSSProperties}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-text-muted mb-1">
+                          Account Holder Name
+                        </label>
+                        <input
+                          type="text"
+                          value={account.name}
+                          onChange={(e) => updateAccount(method.key, "name", e.target.value)}
+                          placeholder="Account holder name"
+                          className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm text-text-primary focus:outline-none focus:ring-2 focus:border-transparent transition-all"
+                          style={{ "--tw-ring-color": `${method.color}33` } as React.CSSProperties}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+              <button
+                type="submit"
+                disabled={paSaving}
+                className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium bg-[#FF9500] text-white hover:bg-[#E68600] transition-all disabled:opacity-50"
+              >
+                {paSaved ? (
+                  <>
+                    <Check className="w-4 h-4" />
+                    Saved!
+                  </>
+                ) : paSaving ? (
+                  "Saving..."
+                ) : (
+                  <>
+                    <Save className="w-4 h-4" />
+                    Save Account Settings
+                  </>
+                )}
+              </button>
+              {paError && (
+                <p className="text-sm text-danger bg-danger-light px-4 py-3 rounded-xl">
+                  {paError}
                 </p>
               )}
             </form>

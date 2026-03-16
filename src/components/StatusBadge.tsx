@@ -3,6 +3,7 @@ import { cn } from "@/lib/utils";
 const variants: Record<string, string> = {
   Pending: "bg-warning-light text-warning",
   Approved: "bg-info-light text-info",
+  Rejected: "bg-danger-light text-danger",
   Completed: "bg-success-light text-success",
   Planning: "bg-secondary-light text-secondary",
   "In Progress": "bg-warning-light text-warning",

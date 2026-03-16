@@ -37,7 +37,7 @@ export default function FundPage() {
   const monthlyFlow = useMemo(() => {
     const map = new Map<string, { income: number; expense: number }>();
 
-    for (const d of donations) {
+    for (const d of donations.filter((d) => d.status === "Approved")) {
       const key = `${d.createdAt.getFullYear()}-${String(
         d.createdAt.getMonth() + 1
       ).padStart(2, "0")}`;
@@ -183,7 +183,7 @@ export default function FundPage() {
             Recent Income
           </h3>
           <div className="space-y-3">
-            {donations.slice(0, 5).map((d) => (
+            {donations.filter((d) => d.status === "Approved").slice(0, 5).map((d) => (
               <div
                 key={d.id}
                 className="flex items-center justify-between py-2 border-b border-border-light last:border-none"

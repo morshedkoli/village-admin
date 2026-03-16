@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo } from "react";
+import React, { useMemo, useEffect } from "react";
 import {
   useVillageOverview,
   useDonations,
@@ -9,6 +9,7 @@ import {
   useUsers,
   useNotifications,
 } from "@/lib/hooks";
+import { syncCitizenCount } from "@/lib/firestore-service";
 import { availableBalance } from "@/lib/models";
 import { formatBDT, relativeTime } from "@/lib/utils";
 import { LoadingSkeleton } from "@/components/LoadingSkeleton";
@@ -47,9 +48,14 @@ export default function Dashboard() {
   const { data: donations, loading: l5 } = useDonations();
   const { data: users, loading: l6 } = useUsers();
 
+  // Keep totalCitizens in sync with actual user count.
+  useEffect(() => {
+    if (!l6) syncCitizenCount().catch(() => {});
+  }, [l6, users.length]);
+
   const monthlyDonations = useMemo(() => {
     const map = new Map<string, number>();
-    for (const d of donations) {
+    for (const d of donations.filter((d) => d.status === "Approved")) {
       const key = `${d.createdAt.getFullYear()}-${String(
         d.createdAt.getMonth() + 1
       ).padStart(2, "0")}`;

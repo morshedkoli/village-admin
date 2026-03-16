@@ -10,10 +10,14 @@ import {
   updateDoc,
   deleteDoc,
   setDoc,
+  getDoc,
+  getDocs,
   serverTimestamp,
+  increment,
   where,
   Unsubscribe,
   DocumentData,
+  runTransaction,
 } from "firebase/firestore";
 import { toDate, toNumber } from "./converters";
 import type {
@@ -23,6 +27,7 @@ import type {
   DevelopmentProject,
   Citizen,
   AppNotification,
+  PaymentAccounts,
 } from "./models";
 
 const VILLAGE_DOC_ID = "main_village";
@@ -51,6 +56,40 @@ export async function updateVillageOverview(
   });
 }
 
+// --- Payment Accounts ---
+
+export function subscribePaymentAccounts(
+  callback: (accounts: PaymentAccounts) => void
+): Unsubscribe {
+  return onSnapshot(doc(db, "villages", VILLAGE_DOC_ID), (snap) => {
+    const d = snap.data() ?? {};
+    const raw = (d.paymentAccounts as Record<string, unknown>) ?? {};
+    const accounts: PaymentAccounts = {};
+    for (const [key, val] of Object.entries(raw)) {
+      if (val && typeof val === "object") {
+        const v = val as Record<string, unknown>;
+        accounts[key] = {
+          number: String(v.number ?? ""),
+          name: String(v.name ?? ""),
+          ...(v.bankName ? { bankName: String(v.bankName) } : {}),
+          ...(v.branch ? { branch: String(v.branch) } : {}),
+        };
+      }
+    }
+    callback(accounts);
+  });
+}
+
+export async function updatePaymentAccounts(
+  accounts: PaymentAccounts
+): Promise<void> {
+  await setDoc(
+    doc(db, "villages", VILLAGE_DOC_ID),
+    { paymentAccounts: accounts },
+    { merge: true }
+  );
+}
+
 // --- Donations ---
 
 function mapDonation(id: string, d: DocumentData): Donation {
@@ -61,6 +100,9 @@ function mapDonation(id: string, d: DocumentData): Donation {
     paymentMethod: (d.paymentMethod as string) ?? "",
     createdAt: toDate(d.createdAt),
     userId: (d.userId as string) ?? "",
+    status: (d.status as Donation["status"]) ?? "Pending",
+    transactionId: (d.transactionId as string) ?? "",
+    senderNumber: (d.senderNumber as string) ?? "",
   };
 }
 
@@ -79,6 +121,39 @@ export function subscribeDonations(
 
 export async function deleteDonation(id: string): Promise<void> {
   await deleteDoc(doc(db, "donations", id));
+}
+
+export async function approveDonation(id: string): Promise<void> {
+  const donationRef = doc(db, "donations", id);
+  const villageRef = doc(db, "villages", VILLAGE_DOC_ID);
+
+  await runTransaction(db, async (tx) => {
+    const donationSnap = await tx.get(donationRef);
+    const data = donationSnap.data();
+    if (!data) throw new Error("Donation not found");
+
+    const amount = toNumber(data.amount);
+    const donorName = (data.donorName as string) ?? "Anonymous";
+
+    tx.update(donationRef, { status: "Approved" });
+    tx.set(villageRef, { totalFundCollected: increment(amount) }, { merge: true });
+    tx.set(doc(collection(db, "fund_transactions")), {
+      type: "donation",
+      amount,
+      reference: donorName,
+      createdAt: serverTimestamp(),
+    });
+    tx.set(doc(collection(db, "notifications")), {
+      title: "নতুন অনুদান",
+      body: `${donorName} ৳${amount} অনুদান দিয়েছেন`,
+      type: "donation",
+      createdAt: serverTimestamp(),
+    });
+  });
+}
+
+export async function rejectDonation(id: string): Promise<void> {
+  await updateDoc(doc(db, "donations", id), { status: "Rejected" });
 }
 
 // --- Projects ---
@@ -208,6 +283,16 @@ export function subscribeUsers(
 
 export async function blockUser(id: string, blocked: boolean): Promise<void> {
   await updateDoc(doc(db, "users", id), { blocked });
+}
+
+export async function syncCitizenCount(): Promise<void> {
+  const q = query(collection(db, "users"), where("isCitizen", "==", true));
+  const snap = await getDocs(q);
+  await setDoc(
+    doc(db, "villages", VILLAGE_DOC_ID),
+    { totalCitizens: snap.size },
+    { merge: true }
+  );
 }
 
 // --- Notifications ---
