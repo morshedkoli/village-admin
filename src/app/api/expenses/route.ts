@@ -96,3 +96,61 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json({ ok: true });
 }
+
+export async function DELETE(req: NextRequest) {
+  const verified = await verifyAdmin(req);
+  if (!verified.ok) {
+    return NextResponse.json(
+      { error: verified.error },
+      { status: verified.status }
+    );
+  }
+
+  const { searchParams } = new URL(req.url);
+  const id = searchParams.get("id")?.trim();
+
+  if (!id) {
+    return NextResponse.json(
+      { error: "Expense id is required" },
+      { status: 400 }
+    );
+  }
+
+  const adminDb = getAdminDb();
+  const expenseRef = adminDb.collection("fund_transactions").doc(id);
+  const villageRef = adminDb.collection("villages").doc("main_village");
+
+  try {
+    await adminDb.runTransaction(async (tx) => {
+      const expenseSnap = await tx.get(expenseRef);
+      if (!expenseSnap.exists) {
+        throw new Error("Expense not found");
+      }
+
+      const data = expenseSnap.data() as
+        | { type?: string; amount?: number }
+        | undefined;
+      if (data?.type !== "expense") {
+        throw new Error("Transaction is not an expense");
+      }
+
+      const amount = Math.max(0, Math.round(Number(data.amount ?? 0)));
+      tx.delete(expenseRef);
+
+      if (amount > 0) {
+        tx.set(
+          villageRef,
+          { totalSpent: FieldValue.increment(-amount) },
+          { merge: true }
+        );
+      }
+    });
+  } catch (error: unknown) {
+    const message =
+      error instanceof Error ? error.message : "Failed to delete expense";
+    const status = message === "Expense not found" ? 404 : 400;
+    return NextResponse.json({ error: message }, { status });
+  }
+
+  return NextResponse.json({ ok: true });
+}

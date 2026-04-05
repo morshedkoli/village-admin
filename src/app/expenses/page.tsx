@@ -6,6 +6,7 @@ import { useAuth } from "@/lib/AuthContext";
 import { LoadingSkeleton } from "@/components/LoadingSkeleton";
 import { EmptyState } from "@/components/EmptyState";
 import { FormModal } from "@/components/FormModal";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { formatBDT, formatDate } from "@/lib/utils";
 import {
   Receipt,
@@ -16,6 +17,7 @@ import {
   Search,
   Plus,
   Check,
+  Trash2,
 } from "lucide-react";
 
 const categoryIcons: Record<string, React.ElementType> = {
@@ -37,6 +39,8 @@ export default function ExpensesPage() {
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [actionError, setActionError] = useState("");
+  const [deleteId, setDeleteId] = useState<string | null>(null);
 
   const filteredExpenses = useMemo(() => {
     return expenses.filter(
@@ -115,6 +119,31 @@ export default function ExpensesPage() {
     }
   };
 
+  const handleDeleteExpense = async (id: string) => {
+    setActionError("");
+
+    try {
+      const token = await user?.getIdToken();
+      const res = await fetch(`/api/expenses?id=${encodeURIComponent(id)}`, {
+        method: "DELETE",
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      });
+
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to delete expense");
+      }
+
+      setDeleteId(null);
+    } catch (err: unknown) {
+      setActionError(
+        err instanceof Error ? err.message : "Failed to delete expense"
+      );
+    }
+  };
+
   if (loading) return <LoadingSkeleton />;
 
   return (
@@ -146,6 +175,12 @@ export default function ExpensesPage() {
           </button>
         </div>
       </div>
+
+      {actionError && (
+        <div className="bg-danger-light border border-danger/20 text-danger rounded-xl px-4 py-3 text-sm animate-fade-in">
+          {actionError}
+        </div>
+      )}
 
       {/* Category Summary Cards */}
       {categorySummary.length > 0 && (
@@ -200,6 +235,9 @@ export default function ExpensesPage() {
                   <th className="px-5 py-3.5 text-left text-xs font-semibold text-text-secondary uppercase tracking-wider">
                     Notes
                   </th>
+                  <th className="px-5 py-3.5 text-right text-xs font-semibold text-text-secondary uppercase tracking-wider">
+                    Actions
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border-light">
@@ -231,6 +269,17 @@ export default function ExpensesPage() {
                       </td>
                       <td className="px-5 py-4 text-sm text-text-secondary max-w-xs">
                         <span className="line-clamp-2">{expense.notes || "-"}</span>
+                      </td>
+                      <td className="px-5 py-4">
+                        <div className="flex justify-end">
+                          <button
+                            onClick={() => setDeleteId(expense.id)}
+                            className="p-2 rounded-lg hover:bg-danger-light text-text-muted hover:text-danger transition-colors"
+                            title="Delete expense"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -342,6 +391,21 @@ export default function ExpensesPage() {
           </div>
         </form>
       </FormModal>
+
+      <ConfirmDialog
+        open={deleteId !== null}
+        title="Delete Expense"
+        message={`Are you sure you want to delete this expense of ${formatBDT(
+          expenses.find((expense) => expense.id === deleteId)?.amount ?? 0
+        )}? This will reduce total spent by the same amount.`}
+        variant="danger"
+        confirmLabel="Delete"
+        loadingLabel="Deleting..."
+        onConfirm={async () => {
+          if (deleteId) await handleDeleteExpense(deleteId);
+        }}
+        onCancel={() => setDeleteId(null)}
+      />
     </div>
   );
 }
