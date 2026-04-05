@@ -10,7 +10,6 @@ import {
   updateDoc,
   deleteDoc,
   setDoc,
-  getDoc,
   getDocs,
   serverTimestamp,
   increment,
@@ -269,17 +268,61 @@ function mapCitizen(id: string, d: DocumentData): Citizen {
   };
 }
 
+function sortCitizensByName(citizens: Citizen[]): Citizen[] {
+  return [...citizens].sort((a, b) => a.name.localeCompare(b.name));
+}
+
 export function subscribeUsers(
   callback: (users: Citizen[]) => void
 ): Unsubscribe {
-  const q = query(
+  const indexedQuery = query(
     collection(db, "users"),
     where("isCitizen", "==", true),
     orderBy("name")
   );
-  return onSnapshot(q, (snap) => {
-    callback(snap.docs.map((doc) => mapCitizen(doc.id, doc.data())));
-  });
+
+  let fallbackUnsubscribe: Unsubscribe | null = null;
+
+  const primaryUnsubscribe = onSnapshot(
+    indexedQuery,
+    (snap) => {
+      callback(
+        sortCitizensByName(
+          snap.docs.map((doc) => mapCitizen(doc.id, doc.data()))
+        )
+      );
+    },
+    (error) => {
+      if (error.code !== "failed-precondition" || fallbackUnsubscribe) {
+        console.error("Failed to subscribe to indexed users", error);
+        return;
+      }
+
+      const fallbackQuery = query(
+        collection(db, "users"),
+        where("isCitizen", "==", true)
+      );
+
+      fallbackUnsubscribe = onSnapshot(
+        fallbackQuery,
+        (snap) => {
+          callback(
+            sortCitizensByName(
+              snap.docs.map((doc) => mapCitizen(doc.id, doc.data()))
+            )
+          );
+        },
+        (fallbackError) => {
+          console.error("Failed to subscribe to fallback users", fallbackError);
+        }
+      );
+    }
+  );
+
+  return () => {
+    primaryUnsubscribe();
+    fallbackUnsubscribe?.();
+  };
 }
 
 export async function blockUser(id: string, blocked: boolean): Promise<void> {
@@ -309,6 +352,14 @@ function mapNotification(id: string, d: DocumentData): AppNotification {
   };
 }
 
+function sortNotificationsByCreatedAt(
+  notifications: AppNotification[]
+): AppNotification[] {
+  return [...notifications].sort(
+    (a, b) => b.createdAt.getTime() - a.createdAt.getTime()
+  );
+}
+
 export function subscribeNotifications(
   callback: (notifications: AppNotification[]) => void
 ): Unsubscribe {
@@ -318,22 +369,70 @@ export function subscribeNotifications(
     limit(200)
   );
   return onSnapshot(q, (snap) => {
-    callback(snap.docs.map((doc) => mapNotification(doc.id, doc.data())));
+    callback(
+      sortNotificationsByCreatedAt(
+        snap.docs.map((doc) => mapNotification(doc.id, doc.data()))
+      )
+    );
   });
 }
 
 export function subscribeUserNotifications(
   callback: (notifications: AppNotification[]) => void
 ): Unsubscribe {
-  const q = query(
+  const indexedQuery = query(
     collection(db, "notifications"),
     where("source", "==", "user"),
     orderBy("createdAt", "desc"),
     limit(100)
   );
-  return onSnapshot(q, (snap) => {
-    callback(snap.docs.map((doc) => mapNotification(doc.id, doc.data())));
-  });
+
+  let fallbackUnsubscribe: Unsubscribe | null = null;
+
+  const primaryUnsubscribe = onSnapshot(
+    indexedQuery,
+    (snap) => {
+      callback(
+        sortNotificationsByCreatedAt(
+          snap.docs.map((doc) => mapNotification(doc.id, doc.data()))
+        )
+      );
+    },
+    (error) => {
+      if (error.code !== "failed-precondition" || fallbackUnsubscribe) {
+        console.error("Failed to subscribe to indexed user notifications", error);
+        return;
+      }
+
+      const fallbackQuery = query(
+        collection(db, "notifications"),
+        where("source", "==", "user"),
+        limit(100)
+      );
+
+      fallbackUnsubscribe = onSnapshot(
+        fallbackQuery,
+        (snap) => {
+          callback(
+            sortNotificationsByCreatedAt(
+              snap.docs.map((doc) => mapNotification(doc.id, doc.data()))
+            )
+          );
+        },
+        (fallbackError) => {
+          console.error(
+            "Failed to subscribe to fallback user notifications",
+            fallbackError
+          );
+        }
+      );
+    }
+  );
+
+  return () => {
+    primaryUnsubscribe();
+    fallbackUnsubscribe?.();
+  };
 }
 
 export async function createNotification(data: {

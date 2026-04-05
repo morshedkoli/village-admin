@@ -1,10 +1,10 @@
 "use client";
 
 import { useAuth } from "./AuthContext";
-import { Loader2, ShieldAlert } from "lucide-react";
+import { ShieldAlert } from "lucide-react";
 
 export function AdminGate({ children }: { children: React.ReactNode }) {
-  const { user, isAdmin, loading, signIn, signOut } = useAuth();
+  const { user, isAdmin, loading, signIn, signOut, adminEmail, adminReason, authError } = useAuth();
 
   if (loading) {
     return (
@@ -28,6 +28,11 @@ export function AdminGate({ children }: { children: React.ReactNode }) {
           <p className="text-text-secondary text-sm mb-8 leading-relaxed">
             Sign in with your admin account to manage the village development platform.
           </p>
+          {authError && (
+            <p className="text-xs text-danger bg-danger-light rounded-lg px-3 py-2 mb-4">
+              {authError}
+            </p>
+          )}
           <button
             onClick={signIn}
             className="w-full flex items-center justify-center gap-3 px-6 py-3 bg-text-primary hover:bg-text-primary/90 text-white font-medium rounded-xl transition-all duration-200 shadow-lg shadow-black/10 hover:shadow-xl hover:shadow-black/15"
@@ -71,8 +76,25 @@ export function AdminGate({ children }: { children: React.ReactNode }) {
             Your account does not have admin access.
           </p>
           <p className="text-xs text-text-muted mb-8 bg-background rounded-lg py-2 px-3 inline-block">
-            {user.email}
+            {adminEmail || user.email}
           </p>
+          {(adminReason || authError) && (
+            <div className="mb-8 text-left bg-background rounded-xl p-4 border border-border">
+              <p className="text-xs font-semibold text-text-primary mb-2">
+                Sign-in diagnostics
+              </p>
+              {adminReason && (
+                <p className="text-xs text-text-secondary break-words">
+                  {adminReason}
+                </p>
+              )}
+              {authError && (
+                <p className="text-xs text-danger break-words mt-2">
+                  {authError}
+                </p>
+              )}
+            </div>
+          )}
           <div>
             <button
               onClick={signOut}

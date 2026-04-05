@@ -79,3 +79,10 @@ export interface PaymentAccount {
 }
 
 export type PaymentAccounts = Record<string, PaymentAccount>;
+
+export interface AdminAccount {
+  id: string;
+  email: string;
+  addedAt?: Date;
+  addedBy?: string;
+}

@@ -2,9 +2,15 @@
 
 import React, { useState, useEffect } from "react";
 import { useVillageOverview, usePaymentAccounts } from "@/lib/hooks";
-import { updateVillageOverview, updatePaymentAccounts } from "@/lib/firestore-service";
+import {
+  updateVillageOverview,
+  updatePaymentAccounts,
+} from "@/lib/firestore-service";
 import { availableBalance } from "@/lib/models";
-import type { PaymentAccounts as PaymentAccountsType } from "@/lib/models";
+import type {
+  AdminAccount,
+  PaymentAccounts as PaymentAccountsType,
+} from "@/lib/models";
 import { formatBDT } from "@/lib/utils";
 import { LoadingSkeleton } from "@/components/LoadingSkeleton";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
@@ -24,6 +30,7 @@ import {
   Smartphone,
   Landmark,
   Bell,
+  Plus,
 } from "lucide-react";
 
 export default function SettingsPage() {
@@ -47,6 +54,12 @@ export default function SettingsPage() {
   const [paSaved, setPaSaved] = useState(false);
   const [paError, setPaError] = useState("");
   const [paLoaded, setPaLoaded] = useState(false);
+  const [adminEmail, setAdminEmail] = useState("");
+  const [adminSaving, setAdminSaving] = useState(false);
+  const [adminSaved, setAdminSaved] = useState(false);
+  const [adminError, setAdminError] = useState("");
+  const [admins, setAdmins] = useState<AdminAccount[]>([]);
+  const [adminsLoading, setAdminsLoading] = useState(true);
 
   useEffect(() => {
     if (overview) setVillageName(overview.name);
@@ -64,7 +77,57 @@ export default function SettingsPage() {
     }
   }, [paymentAccounts, paLoading, paLoaded]);
 
+  useEffect(() => {
+    const loadAdmins = async () => {
+      if (!user) {
+        setAdmins([]);
+        setAdminsLoading(false);
+        return;
+      }
+
+      try {
+        setAdminsLoading(true);
+        const token = await user.getIdToken();
+        const res = await fetch("/api/admins", {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        if (!res.ok) {
+          throw new Error("Failed to load admins");
+        }
+
+        const data = (await res.json()) as {
+          admins?: Array<{
+            id: string;
+            email: string;
+            addedBy?: string;
+            addedAt?: string | null;
+          }>;
+        };
+
+        setAdmins(
+          (data.admins ?? []).map((admin) => ({
+            id: admin.id,
+            email: admin.email,
+            addedBy: admin.addedBy ?? "",
+            addedAt: admin.addedAt ? new Date(admin.addedAt) : undefined,
+          }))
+        );
+      } catch {
+        setAdmins([]);
+      } finally {
+        setAdminsLoading(false);
+      }
+    };
+
+    void loadAdmins();
+  }, [user]);
+
   if (loading) return <LoadingSkeleton />;
+
+  const normalizeAdminEmail = (email: string) => email.trim().toLowerCase();
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
@@ -120,6 +183,61 @@ export default function SettingsPage() {
       setPaError(msg);
     } finally {
       setPaSaving(false);
+    }
+  };
+
+  const handleAddAdmin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const normalizedEmail = normalizeAdminEmail(adminEmail);
+
+    if (!normalizedEmail) {
+      setAdminError("Please enter an email address.");
+      return;
+    }
+
+    const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailPattern.test(normalizedEmail)) {
+      setAdminError("Please enter a valid email address.");
+      return;
+    }
+
+    if (admins.some((admin) => admin.email === normalizedEmail)) {
+      setAdminError("This email already has admin access.");
+      return;
+    }
+
+    setAdminSaving(true);
+    setAdminError("");
+
+    try {
+      const token = await user?.getIdToken();
+      const res = await fetch("/api/admins", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ email: normalizedEmail }),
+      });
+
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to add admin");
+      }
+
+      setAdminEmail("");
+      setAdmins((prev) =>
+        [...prev, { id: normalizedEmail, email: normalizedEmail, addedBy: user?.email ?? "" }]
+          .sort((a, b) => a.email.localeCompare(b.email))
+      );
+      setAdminSaved(true);
+      setTimeout(() => setAdminSaved(false), 2000);
+    } catch (err: unknown) {
+      const msg =
+        err instanceof Error ? err.message : "Failed to add admin";
+      setAdminError(msg);
+    } finally {
+      setAdminSaving(false);
     }
   };
 
@@ -424,59 +542,155 @@ export default function SettingsPage() {
         </div>
 
         {/* Admin Profile */}
-        {user && (
+        <div className="space-y-6">
+          {user && (
+            <div className="bg-white rounded-2xl border border-border p-6 h-fit">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-10 h-10 rounded-xl bg-secondary-light flex items-center justify-center">
+                  <Shield className="w-5 h-5 text-secondary" />
+                </div>
+                <div>
+                  <h2 className="text-base font-semibold text-text-primary">
+                    Admin Profile
+                  </h2>
+                  <p className="text-xs text-text-muted">Your account details</p>
+                </div>
+              </div>
+
+              <div className="flex flex-col items-center text-center mb-6">
+                {user.photoURL ? (
+                  <img
+                    src={user.photoURL}
+                    alt=""
+                    className="w-20 h-20 rounded-2xl mb-3 ring-4 ring-background"
+                    referrerPolicy="no-referrer"
+                  />
+                ) : (
+                  <div className="w-20 h-20 rounded-2xl bg-primary text-white flex items-center justify-center text-2xl font-bold mb-3">
+                    {user.displayName?.charAt(0) || "A"}
+                  </div>
+                )}
+                <h3 className="text-lg font-semibold text-text-primary">
+                  {user.displayName}
+                </h3>
+                <span className="text-xs font-medium text-primary bg-primary-light px-2.5 py-1 rounded-lg mt-1">
+                  Administrator
+                </span>
+              </div>
+
+              <div className="space-y-3 p-4 bg-background rounded-xl">
+                <div className="flex items-center gap-3 text-sm">
+                  <UserIcon className="w-4 h-4 text-text-muted" />
+                  <div>
+                    <p className="text-xs text-text-muted">Display Name</p>
+                    <p className="text-text-primary font-medium">{user.displayName}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 text-sm">
+                  <Mail className="w-4 h-4 text-text-muted" />
+                  <div>
+                    <p className="text-xs text-text-muted">Email</p>
+                    <p className="text-text-primary font-medium">{user.email}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="bg-white rounded-2xl border border-border p-6 h-fit">
             <div className="flex items-center gap-3 mb-6">
-              <div className="w-10 h-10 rounded-xl bg-secondary-light flex items-center justify-center">
-                <Shield className="w-5 h-5 text-secondary" />
+              <div className="w-10 h-10 rounded-xl bg-primary-light flex items-center justify-center">
+                <Shield className="w-5 h-5 text-primary" />
               </div>
               <div>
                 <h2 className="text-base font-semibold text-text-primary">
-                  Admin Profile
+                  Admin Access
                 </h2>
-                <p className="text-xs text-text-muted">Your account details</p>
+                <p className="text-xs text-text-muted">
+                  Add a new admin by email address
+                </p>
               </div>
             </div>
 
-            <div className="flex flex-col items-center text-center mb-6">
-              {user.photoURL ? (
-                <img
-                  src={user.photoURL}
-                  alt=""
-                  className="w-20 h-20 rounded-2xl mb-3 ring-4 ring-background"
-                  referrerPolicy="no-referrer"
+            <form onSubmit={handleAddAdmin} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-text-primary mb-1.5">
+                  Admin Email
+                </label>
+                <input
+                  type="email"
+                  value={adminEmail}
+                  onChange={(e) => setAdminEmail(e.target.value)}
+                  placeholder="name@example.com"
+                  className="w-full px-4 py-2.5 rounded-xl border border-border bg-background text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
                 />
-              ) : (
-                <div className="w-20 h-20 rounded-2xl bg-primary text-white flex items-center justify-center text-2xl font-bold mb-3">
-                  {user.displayName?.charAt(0) || "A"}
-                </div>
-              )}
-              <h3 className="text-lg font-semibold text-text-primary">
-                {user.displayName}
-              </h3>
-              <span className="text-xs font-medium text-primary bg-primary-light px-2.5 py-1 rounded-lg mt-1">
-                Administrator
-              </span>
-            </div>
-
-            <div className="space-y-3 p-4 bg-background rounded-xl">
-              <div className="flex items-center gap-3 text-sm">
-                <UserIcon className="w-4 h-4 text-text-muted" />
-                <div>
-                  <p className="text-xs text-text-muted">Display Name</p>
-                  <p className="text-text-primary font-medium">{user.displayName}</p>
-                </div>
+                <p className="text-xs text-text-muted mt-2">
+                  The user can sign in with this email and will get admin access automatically.
+                </p>
               </div>
-              <div className="flex items-center gap-3 text-sm">
-                <Mail className="w-4 h-4 text-text-muted" />
-                <div>
-                  <p className="text-xs text-text-muted">Email</p>
-                  <p className="text-text-primary font-medium">{user.email}</p>
-                </div>
+
+              <button
+                type="submit"
+                disabled={adminSaving}
+                className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium bg-text-primary text-white hover:bg-text-primary/90 transition-all disabled:opacity-50"
+              >
+                {adminSaved ? (
+                  <>
+                    <Check className="w-4 h-4" />
+                    Added!
+                  </>
+                ) : adminSaving ? (
+                  "Adding..."
+                ) : (
+                  <>
+                    <Plus className="w-4 h-4" />
+                    Add Admin
+                  </>
+                )}
+              </button>
+
+              {adminError && (
+                <p className="text-sm text-danger bg-danger-light px-4 py-3 rounded-xl">
+                  {adminError}
+                </p>
+              )}
+            </form>
+
+            <div className="mt-6 pt-6 border-t border-border">
+              <p className="text-sm font-medium text-text-primary mb-3">
+                Current Admins
+              </p>
+              <div className="space-y-2">
+                {adminsLoading ? (
+                  <p className="text-sm text-text-muted">Loading admins...</p>
+                ) : admins.length === 0 ? (
+                  <p className="text-sm text-text-muted">No extra admins added yet.</p>
+                ) : (
+                  admins.map((admin) => (
+                    <div
+                      key={admin.id}
+                      className="flex items-center justify-between gap-3 rounded-xl bg-background px-4 py-3"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-text-primary break-all">
+                          {admin.email}
+                        </p>
+                        {admin.addedBy && (
+                          <p className="text-xs text-text-muted break-all">
+                            Added by {admin.addedBy}
+                          </p>
+                        )}
+                      </div>
+                      <span className="text-xs font-medium text-primary bg-primary-light px-2.5 py-1 rounded-lg">
+                        Admin
+                      </span>
+                    </div>
+                  ))
+                )}
               </div>
             </div>
           </div>
-        )}
+        </div>
       </div>
 
       <ConfirmDialog
