@@ -2,6 +2,7 @@
 
 import React, { useState, useMemo } from "react";
 import { useDonations } from "@/lib/hooks";
+import { useAuth } from "@/lib/AuthContext";
 import {
   deleteDonation,
   approveDonation,
@@ -10,6 +11,7 @@ import {
 import { LoadingSkeleton } from "@/components/LoadingSkeleton";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { EmptyState } from "@/components/EmptyState";
+import { FormModal } from "@/components/FormModal";
 import { StatusBadge } from "@/components/StatusBadge";
 import { ChartCard } from "@/components/ChartCard";
 import { formatBDT, formatDate } from "@/lib/utils";
@@ -23,6 +25,8 @@ import {
   CircleDollarSign,
   Ban,
   CheckCheck,
+  Plus,
+  HeartHandshake,
 } from "lucide-react";
 import {
   BarChart,
@@ -47,6 +51,7 @@ type FilterPeriod = "all" | "today" | "week" | "month";
 type StatusFilter = "all" | "Pending" | "Approved" | "Rejected";
 
 export default function DonationsPage() {
+  const { user } = useAuth();
   const { data: donations, loading } = useDonations();
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [approveId, setApproveId] = useState<string | null>(null);
@@ -56,6 +61,17 @@ export default function DonationsPage() {
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkApproveOpen, setBulkApproveOpen] = useState(false);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [createLoading, setCreateLoading] = useState(false);
+  const [createError, setCreateError] = useState("");
+  const [form, setForm] = useState({
+    donorName: "",
+    amount: "",
+    paymentMethod: "Cash",
+    senderNumber: "",
+    transactionId: "",
+    status: "Approved" as "Pending" | "Approved",
+  });
 
   const filtered = useMemo(() => {
     const now = new Date();
@@ -181,6 +197,68 @@ export default function DonationsPage() {
     .filter((d) => selectedIds.has(d.id))
     .reduce((s, d) => s + d.amount, 0);
 
+  const resetCreateForm = () => {
+    setForm({
+      donorName: "",
+      amount: "",
+      paymentMethod: "Cash",
+      senderNumber: "",
+      transactionId: "",
+      status: "Approved",
+    });
+    setCreateError("");
+  };
+
+  const handleCreateDonation = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    const amount = Number(form.amount);
+    if (!form.donorName.trim()) {
+      setCreateError("Donor name is required.");
+      return;
+    }
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setCreateError("Enter a valid amount greater than zero.");
+      return;
+    }
+
+    setCreateLoading(true);
+    setCreateError("");
+
+    try {
+      const token = await user?.getIdToken();
+      const res = await fetch("/api/donations", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          donorName: form.donorName,
+          amount,
+          paymentMethod: form.paymentMethod,
+          senderNumber: form.senderNumber,
+          transactionId: form.transactionId,
+          status: form.status,
+        }),
+      });
+
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to add donation");
+      }
+
+      resetCreateForm();
+      setShowCreateModal(false);
+    } catch (err: unknown) {
+      setCreateError(
+        err instanceof Error ? err.message : "Failed to add donation"
+      );
+    } finally {
+      setCreateLoading(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -199,6 +277,13 @@ export default function DonationsPage() {
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className="flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-xl bg-primary text-white hover:bg-primary-dark transition-colors"
+          >
+            <Plus className="w-4 h-4" />
+            Add Donation
+          </button>
           <div className="flex items-center gap-1 bg-background rounded-xl p-1">
             {(["all", "Pending", "Approved", "Rejected"] as StatusFilter[]).map(
               (s) => (
@@ -666,6 +751,145 @@ export default function DonationsPage() {
         }}
         onCancel={() => setDeleteId(null)}
       />
+
+      <FormModal
+        open={showCreateModal}
+        title="Add Donation"
+        onClose={() => {
+          setShowCreateModal(false);
+          resetCreateForm();
+        }}
+        size="md"
+      >
+        <form onSubmit={handleCreateDonation} className="space-y-5">
+          <div>
+            <label className="block text-sm font-medium text-text-primary mb-1.5">
+              Donor Name
+            </label>
+            <input
+              type="text"
+              value={form.donorName}
+              onChange={(e) =>
+                setForm((prev) => ({ ...prev, donorName: e.target.value }))
+              }
+              placeholder="e.g. Abdul Karim"
+              className="w-full px-4 py-2.5 rounded-xl border border-border bg-background text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+            />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-text-primary mb-1.5">
+                Amount
+              </label>
+              <input
+                type="number"
+                min="1"
+                step="1"
+                value={form.amount}
+                onChange={(e) =>
+                  setForm((prev) => ({ ...prev, amount: e.target.value }))
+                }
+                placeholder="5000"
+                className="w-full px-4 py-2.5 rounded-xl border border-border bg-background text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-text-primary mb-1.5">
+                Status
+              </label>
+              <select
+                value={form.status}
+                onChange={(e) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    status: e.target.value as "Pending" | "Approved",
+                  }))
+                }
+                className="w-full px-4 py-2.5 rounded-xl border border-border bg-background text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+              >
+                <option value="Approved">Approved</option>
+                <option value="Pending">Pending</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-text-primary mb-1.5">
+                Payment Method
+              </label>
+              <select
+                value={form.paymentMethod}
+                onChange={(e) =>
+                  setForm((prev) => ({ ...prev, paymentMethod: e.target.value }))
+                }
+                className="w-full px-4 py-2.5 rounded-xl border border-border bg-background text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+              >
+                {["Cash", "bKash", "Nagad", "Rocket", "Bank Transfer"].map(
+                  (method) => (
+                    <option key={method} value={method}>
+                      {method}
+                    </option>
+                  )
+                )}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-text-primary mb-1.5">
+                Sender Number
+              </label>
+              <input
+                type="text"
+                value={form.senderNumber}
+                onChange={(e) =>
+                  setForm((prev) => ({ ...prev, senderNumber: e.target.value }))
+                }
+                placeholder="Optional phone/account number"
+                className="w-full px-4 py-2.5 rounded-xl border border-border bg-background text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-text-primary mb-1.5">
+              Transaction ID
+            </label>
+            <input
+              type="text"
+              value={form.transactionId}
+              onChange={(e) =>
+                setForm((prev) => ({ ...prev, transactionId: e.target.value }))
+              }
+              placeholder="Optional transaction reference"
+              className="w-full px-4 py-2.5 rounded-xl border border-border bg-background text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+            />
+          </div>
+
+          {createError && (
+            <p className="text-sm text-danger bg-danger-light px-4 py-3 rounded-xl">
+              {createError}
+            </p>
+          )}
+
+          <div className="flex justify-end">
+            <button
+              type="submit"
+              disabled={createLoading}
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium bg-primary text-white hover:bg-primary-dark transition-all disabled:opacity-50"
+            >
+              {createLoading ? (
+                "Saving..."
+              ) : (
+                <>
+                  <HeartHandshake className="w-4 h-4" />
+                  Save Donation
+                </>
+              )}
+            </button>
+          </div>
+        </form>
+      </FormModal>
     </div>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import { useAuth } from "@/lib/AuthContext";
 import { useProblems } from "@/lib/hooks";
 import { updateProblemStatus, deleteProblem } from "@/lib/firestore-service";
 import { LoadingSkeleton } from "@/components/LoadingSkeleton";
@@ -18,25 +19,99 @@ import {
   Calendar,
   User,
   ShieldCheck,
+  Plus,
+  Save,
 } from "lucide-react";
 
 export default function ProblemsPage() {
+  const { user } = useAuth();
   const { data: problems, loading } = useProblems();
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [viewProblem, setViewProblem] = useState<ProblemReport | null>(null);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [createLoading, setCreateLoading] = useState(false);
+  const [createError, setCreateError] = useState("");
+  const [form, setForm] = useState({
+    title: "",
+    description: "",
+    location: "",
+    photoUrl: "",
+    status: "Pending" as ProblemReport["status"],
+  });
 
   if (loading) return <LoadingSkeleton />;
 
   const pending = problems.filter((p) => p.status === "Pending").length;
   const approved = problems.filter((p) => p.status === "Approved").length;
 
+  const resetCreateForm = () => {
+    setForm({
+      title: "",
+      description: "",
+      location: "",
+      photoUrl: "",
+      status: "Pending",
+    });
+    setCreateError("");
+  };
+
+  const handleCreateProblem = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!form.title.trim()) {
+      setCreateError("Problem title is required.");
+      return;
+    }
+
+    if (!form.description.trim()) {
+      setCreateError("Problem description is required.");
+      return;
+    }
+
+    setCreateLoading(true);
+    setCreateError("");
+
+    try {
+      const token = await user?.getIdToken();
+      const res = await fetch("/api/problems", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify(form),
+      });
+
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to add problem");
+      }
+
+      resetCreateForm();
+      setShowCreateModal(false);
+    } catch (err: unknown) {
+      setCreateError(err instanceof Error ? err.message : "Failed to add problem");
+    } finally {
+      setCreateLoading(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-text-primary">Problems</h1>
-        <p className="text-sm text-text-secondary mt-1">
-          {problems.length} reported &middot; {pending} pending &middot; {approved} approved
-        </p>
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div>
+          <h1 className="text-2xl font-bold text-text-primary">Problems</h1>
+          <p className="text-sm text-text-secondary mt-1">
+            {problems.length} reported &middot; {pending} pending &middot; {approved} approved
+          </p>
+        </div>
+        <button
+          onClick={() => setShowCreateModal(true)}
+          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium bg-primary text-white hover:bg-primary-dark transition-all"
+        >
+          <Plus className="w-4 h-4" />
+          Add Problem
+        </button>
       </div>
 
       <div className="bg-white rounded-2xl border border-border overflow-hidden">
@@ -254,6 +329,122 @@ export default function ProblemsPage() {
         }}
         onCancel={() => setDeleteId(null)}
       />
+
+      <FormModal
+        open={showCreateModal}
+        title="Add Problem"
+        onClose={() => {
+          setShowCreateModal(false);
+          resetCreateForm();
+        }}
+        size="md"
+      >
+        <form onSubmit={handleCreateProblem} className="space-y-5">
+          <div>
+            <label className="block text-sm font-medium text-text-primary mb-1.5">
+              Problem Title
+            </label>
+            <input
+              type="text"
+              value={form.title}
+              onChange={(e) =>
+                setForm((prev) => ({ ...prev, title: e.target.value }))
+              }
+              placeholder="e.g. Road damage near school"
+              className="w-full px-4 py-2.5 rounded-xl border border-border bg-background text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-text-primary mb-1.5">
+              Description
+            </label>
+            <textarea
+              value={form.description}
+              onChange={(e) =>
+                setForm((prev) => ({ ...prev, description: e.target.value }))
+              }
+              rows={4}
+              placeholder="Describe the issue and why it needs attention"
+              className="w-full px-4 py-3 rounded-xl border border-border bg-background text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all resize-none"
+            />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-text-primary mb-1.5">
+                Location
+              </label>
+              <input
+                type="text"
+                value={form.location}
+                onChange={(e) =>
+                  setForm((prev) => ({ ...prev, location: e.target.value }))
+                }
+                placeholder="e.g. North road, market area"
+                className="w-full px-4 py-2.5 rounded-xl border border-border bg-background text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-text-primary mb-1.5">
+                Status
+              </label>
+              <select
+                value={form.status}
+                onChange={(e) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    status: e.target.value as ProblemReport["status"],
+                  }))
+                }
+                className="w-full px-4 py-2.5 rounded-xl border border-border bg-background text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+              >
+                <option value="Pending">Pending</option>
+                <option value="Approved">Approved</option>
+                <option value="Completed">Completed</option>
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-text-primary mb-1.5">
+              Photo URL
+            </label>
+            <input
+              type="url"
+              value={form.photoUrl}
+              onChange={(e) =>
+                setForm((prev) => ({ ...prev, photoUrl: e.target.value }))
+              }
+              placeholder="https://example.com/photo.jpg"
+              className="w-full px-4 py-2.5 rounded-xl border border-border bg-background text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+            />
+          </div>
+
+          {createError && (
+            <p className="text-sm text-danger bg-danger-light px-4 py-3 rounded-xl">
+              {createError}
+            </p>
+          )}
+
+          <div className="flex justify-end">
+            <button
+              type="submit"
+              disabled={createLoading}
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium bg-primary text-white hover:bg-primary-dark transition-all disabled:opacity-50"
+            >
+              {createLoading ? (
+                "Saving..."
+              ) : (
+                <>
+                  <Save className="w-4 h-4" />
+                  Save Problem
+                </>
+              )}
+            </button>
+          </div>
+        </form>
+      </FormModal>
     </div>
   );
 }

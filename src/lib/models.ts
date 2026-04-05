@@ -86,3 +86,12 @@ export interface AdminAccount {
   addedAt?: Date;
   addedBy?: string;
 }
+
+export interface ExpenseEntry {
+  id: string;
+  project: string;
+  category: string;
+  amount: number;
+  date: Date;
+  notes?: string;
+}

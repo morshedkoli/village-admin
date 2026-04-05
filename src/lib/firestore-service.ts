@@ -27,6 +27,7 @@ import type {
   Citizen,
   AppNotification,
   PaymentAccounts,
+  ExpenseEntry,
 } from "./models";
 
 const VILLAGE_DOC_ID = "main_village";
@@ -337,6 +338,80 @@ export async function syncCitizenCount(): Promise<void> {
     { totalCitizens: snap.size },
     { merge: true }
   );
+}
+
+// --- Expenses ---
+
+function mapExpense(id: string, d: DocumentData): ExpenseEntry {
+  return {
+    id,
+    project: (d.project as string) ?? (d.reference as string) ?? "General",
+    category: (d.category as string) ?? "Other",
+    amount: toNumber(d.amount),
+    date: d.createdAt ? toDate(d.createdAt) : new Date(),
+    notes: (d.notes as string) ?? "",
+  };
+}
+
+function sortExpensesByDate(expenses: ExpenseEntry[]): ExpenseEntry[] {
+  return [...expenses].sort((a, b) => b.date.getTime() - a.date.getTime());
+}
+
+export function subscribeExpenses(
+  callback: (expenses: ExpenseEntry[]) => void
+): Unsubscribe {
+  const q = query(
+    collection(db, "fund_transactions"),
+    orderBy("createdAt", "desc"),
+    limit(200)
+  );
+
+  return onSnapshot(q, (snap) => {
+    callback(
+      sortExpensesByDate(
+        snap.docs
+          .map((expenseDoc) => mapExpense(expenseDoc.id, expenseDoc.data()))
+          .filter((expenseDoc) => {
+            const raw = snap.docs.find((doc) => doc.id === expenseDoc.id)?.data();
+            return raw?.type === "expense";
+          })
+      )
+    );
+  });
+}
+
+export async function createExpense(data: {
+  project: string;
+  category: string;
+  amount: number;
+  notes?: string;
+}): Promise<void> {
+  const amount = Math.round(data.amount);
+  if (amount <= 0) {
+    throw new Error("Expense amount must be greater than zero");
+  }
+
+  const project = data.project.trim();
+  const category = data.category.trim();
+  const notes = data.notes?.trim() ?? "";
+
+  await runTransaction(db, async (tx) => {
+    tx.set(doc(collection(db, "fund_transactions")), {
+      type: "expense",
+      amount,
+      reference: project || "General",
+      project: project || "General",
+      category: category || "Other",
+      notes,
+      createdAt: serverTimestamp(),
+    });
+
+    tx.set(
+      doc(db, "villages", VILLAGE_DOC_ID),
+      { totalSpent: increment(amount) },
+      { merge: true }
+    );
+  });
 }
 
 // --- Notifications ---

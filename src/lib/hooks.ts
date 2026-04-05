@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import {
   subscribeVillageOverview,
   subscribeDonations,
+  subscribeExpenses,
   subscribeProjects,
   subscribeProblems,
   subscribeUsers,
@@ -19,6 +20,7 @@ import type {
   Citizen,
   AppNotification,
   PaymentAccounts,
+  ExpenseEntry,
 } from "./models";
 
 export function useVillageOverview() {
@@ -133,6 +135,21 @@ export function usePaymentAccounts() {
   useEffect(() => {
     const unsub = subscribePaymentAccounts((accounts) => {
       setData(accounts);
+      setLoading(false);
+    });
+    return unsub;
+  }, []);
+
+  return { data, loading };
+}
+
+export function useExpenses() {
+  const [data, setData] = useState<ExpenseEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const unsub = subscribeExpenses((expenses) => {
+      setData(expenses);
       setLoading(false);
     });
     return unsub;

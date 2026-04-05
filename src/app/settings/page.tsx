@@ -2,10 +2,6 @@
 
 import React, { useState, useEffect } from "react";
 import { useVillageOverview, usePaymentAccounts } from "@/lib/hooks";
-import {
-  updateVillageOverview,
-  updatePaymentAccounts,
-} from "@/lib/firestore-service";
 import { availableBalance } from "@/lib/models";
 import type {
   AdminAccount,
@@ -19,6 +15,8 @@ import {
   Settings,
   Save,
   Check,
+  Pencil,
+  X,
   Wallet,
   TrendingDown,
   Scale,
@@ -42,6 +40,7 @@ export default function SettingsPage() {
   const [saved, setSaved] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [error, setError] = useState("");
+  const [editingVillageName, setEditingVillageName] = useState(false);
 
   // Payment accounts state
   const [accounts, setAccounts] = useState<PaymentAccountsType>({
@@ -62,8 +61,8 @@ export default function SettingsPage() {
   const [adminsLoading, setAdminsLoading] = useState(true);
 
   useEffect(() => {
-    if (overview) setVillageName(overview.name);
-  }, [overview]);
+    if (overview && !editingVillageName) setVillageName(overview.name);
+  }, [overview, editingVillageName]);
 
   useEffect(() => {
     if (!paLoaded && !paLoading) {
@@ -139,19 +138,28 @@ export default function SettingsPage() {
     setSaving(true);
     setError("");
     try {
-      await updateVillageOverview({ name: villageName });
+      const token = await user?.getIdToken();
+      const res = await fetch("/api/settings", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ name: villageName }),
+      });
+
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to update village name");
+      }
+
+      setEditingVillageName(false);
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } catch (err: unknown) {
       const msg =
         err instanceof Error ? err.message : "Failed to update village name";
-      if (msg.includes("permission")) {
-        setError(
-          "Permission denied. Please update Firestore rules to allow writes to the 'villages' collection for authenticated users."
-        );
-      } else {
-        setError(msg);
-      }
+      setError(msg);
     } finally {
       setSaving(false);
       setShowConfirm(false);
@@ -174,7 +182,21 @@ export default function SettingsPage() {
     setPaSaving(true);
     setPaError("");
     try {
-      await updatePaymentAccounts(accounts);
+      const token = await user?.getIdToken();
+      const res = await fetch("/api/settings", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ paymentAccounts: accounts }),
+      });
+
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to update payment accounts");
+      }
+
       setPaSaved(true);
       setTimeout(() => setPaSaved(false), 2000);
     } catch (err: unknown) {
@@ -312,32 +334,68 @@ export default function SettingsPage() {
                 <label className="block text-sm font-medium text-text-primary mb-1.5">
                   Village Name
                 </label>
-                <input
-                  type="text"
-                  value={villageName}
-                  onChange={(e) => setVillageName(e.target.value)}
-                  className="w-full px-4 py-2.5 rounded-xl border border-border bg-background text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
-                />
-              </div>
-              <button
-                type="submit"
-                disabled={saving}
-                className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium bg-primary text-white hover:bg-primary-dark transition-all disabled:opacity-50"
-              >
-                {saved ? (
-                  <>
-                    <Check className="w-4 h-4" />
-                    Saved!
-                  </>
-                ) : saving ? (
-                  "Saving..."
+                {editingVillageName ? (
+                  <input
+                    type="text"
+                    value={villageName}
+                    onChange={(e) => setVillageName(e.target.value)}
+                    className="w-full px-4 py-2.5 rounded-xl border border-border bg-background text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+                  />
                 ) : (
-                  <>
-                    <Save className="w-4 h-4" />
-                    Save Settings
-                  </>
+                  <div className="flex items-center justify-between gap-3 rounded-xl border border-border bg-background px-4 py-3">
+                    <span className="text-sm text-text-primary font-medium">
+                      {overview?.name || "Our Village"}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setVillageName(overview?.name ?? "");
+                        setEditingVillageName(true);
+                        setError("");
+                      }}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white border border-border text-sm font-medium text-text-primary hover:bg-surface-hover transition-colors"
+                    >
+                      <Pencil className="w-4 h-4" />
+                      Edit
+                    </button>
+                  </div>
                 )}
-              </button>
+              </div>
+              {editingVillageName && (
+                <div className="flex items-center gap-3">
+                  <button
+                    type="submit"
+                    disabled={saving}
+                    className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium bg-primary text-white hover:bg-primary-dark transition-all disabled:opacity-50"
+                  >
+                    {saved ? (
+                      <>
+                        <Check className="w-4 h-4" />
+                        Saved!
+                      </>
+                    ) : saving ? (
+                      "Saving..."
+                    ) : (
+                      <>
+                        <Save className="w-4 h-4" />
+                        Save Name
+                      </>
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setVillageName(overview?.name ?? "");
+                      setEditingVillageName(false);
+                      setError("");
+                    }}
+                    className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium bg-background hover:bg-surface-hover text-text-primary border border-border transition-all"
+                  >
+                    <X className="w-4 h-4" />
+                    Cancel
+                  </button>
+                </div>
+              )}
               {error && (
                 <p className="text-sm text-danger bg-danger-light px-4 py-3 rounded-xl">
                   {error}

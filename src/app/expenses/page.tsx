@@ -1,9 +1,11 @@
 "use client";
 
 import React, { useState, useMemo } from "react";
-import { useProjects } from "@/lib/hooks";
+import { useExpenses, useProjects } from "@/lib/hooks";
+import { useAuth } from "@/lib/AuthContext";
 import { LoadingSkeleton } from "@/components/LoadingSkeleton";
 import { EmptyState } from "@/components/EmptyState";
+import { FormModal } from "@/components/FormModal";
 import { formatBDT, formatDate } from "@/lib/utils";
 import {
   Receipt,
@@ -12,6 +14,8 @@ import {
   Truck,
   Wrench,
   Search,
+  Plus,
+  Check,
 } from "lucide-react";
 
 const categoryIcons: Record<string, React.ElementType> = {
@@ -22,72 +26,94 @@ const categoryIcons: Record<string, React.ElementType> = {
 };
 
 export default function ExpensesPage() {
-  const { data: projects, loading } = useProjects();
+  const { user } = useAuth();
+  const { data: projects } = useProjects();
+  const { data: expenses, loading } = useExpenses();
   const [search, setSearch] = useState("");
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [project, setProject] = useState("");
+  const [category, setCategory] = useState("Materials");
+  const [amount, setAmount] = useState("");
+  const [notes, setNotes] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
 
-  const expenses = useMemo(() => {
-    const items: {
-      id: string;
-      project: string;
-      category: string;
-      amount: number;
-      date: Date;
-    }[] = [];
-
-    for (const p of projects) {
-      if (p.allocatedFunds > 0) {
-        items.push({
-          id: p.id,
-          project: p.title,
-          category: "Materials",
-          amount: p.estimatedCost > 0 ? Math.round(p.estimatedCost * 0.4) : 0,
-          date: p.createdAt ?? new Date(),
-        });
-        if (p.estimatedCost > 0) {
-          items.push({
-            id: p.id + "-labor",
-            project: p.title,
-            category: "Labor",
-            amount: Math.round(p.estimatedCost * 0.35),
-            date: p.createdAt ?? new Date(),
-          });
-          items.push({
-            id: p.id + "-transport",
-            project: p.title,
-            category: "Transport",
-            amount: Math.round(p.estimatedCost * 0.15),
-            date: p.createdAt ?? new Date(),
-          });
-          items.push({
-            id: p.id + "-equip",
-            project: p.title,
-            category: "Equipment",
-            amount: Math.round(p.estimatedCost * 0.1),
-            date: p.createdAt ?? new Date(),
-          });
-        }
-      }
-    }
-    return items.filter(
+  const filteredExpenses = useMemo(() => {
+    return expenses.filter(
       (e) =>
         !search ||
         e.project.toLowerCase().includes(search.toLowerCase()) ||
-        e.category.toLowerCase().includes(search.toLowerCase())
+        e.category.toLowerCase().includes(search.toLowerCase()) ||
+        (e.notes ?? "").toLowerCase().includes(search.toLowerCase())
     );
-  }, [projects, search]);
+  }, [expenses, search]);
 
-  const totalExpenses = expenses.reduce((s, e) => s + e.amount, 0);
+  const totalExpenses = filteredExpenses.reduce((s, e) => s + e.amount, 0);
 
   const categorySummary = useMemo(() => {
     const map = new Map<string, number>();
-    for (const e of expenses) {
+    for (const e of filteredExpenses) {
       map.set(e.category, (map.get(e.category) ?? 0) + e.amount);
     }
     return Array.from(map.entries()).map(([category, amount]) => ({
       category,
       amount,
     }));
-  }, [expenses]);
+  }, [filteredExpenses]);
+
+  const resetForm = () => {
+    setProject("");
+    setCategory("Materials");
+    setAmount("");
+    setNotes("");
+    setError("");
+  };
+
+  const handleCreateExpense = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    const numericAmount = Number(amount);
+    if (!project.trim()) {
+      setError("Project or expense title is required.");
+      return;
+    }
+    if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
+      setError("Enter a valid amount greater than zero.");
+      return;
+    }
+
+    setSaving(true);
+    setError("");
+
+    try {
+      const token = await user?.getIdToken();
+      const res = await fetch("/api/expenses", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          project,
+          category,
+          amount: numericAmount,
+          notes,
+        }),
+      });
+
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to add expense");
+      }
+
+      resetForm();
+      setShowCreateModal(false);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to add expense");
+    } finally {
+      setSaving(false);
+    }
+  };
 
   if (loading) return <LoadingSkeleton />;
 
@@ -97,18 +123,27 @@ export default function ExpensesPage() {
         <div>
           <h1 className="text-2xl font-bold text-text-primary">Expenses</h1>
           <p className="text-sm text-text-secondary mt-1">
-            Total: {formatBDT(totalExpenses)} across {expenses.length} entries
+            Total: {formatBDT(totalExpenses)} across {filteredExpenses.length} entries
           </p>
         </div>
-        <div className="relative w-72">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted" />
-          <input
-            type="text"
-            placeholder="Search by project or category..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 bg-white rounded-xl border border-border text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
-          />
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="relative w-72">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted" />
+            <input
+              type="text"
+              placeholder="Search by project, category, or note..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full pl-10 pr-4 py-2.5 bg-white rounded-xl border border-border text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+            />
+          </div>
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium bg-primary text-white hover:bg-primary-dark transition-all"
+          >
+            <Plus className="w-4 h-4" />
+            Add Expense
+          </button>
         </div>
       </div>
 
@@ -139,11 +174,11 @@ export default function ExpensesPage() {
 
       {/* Expense Table */}
       <div className="bg-white rounded-2xl border border-border overflow-hidden">
-        {expenses.length === 0 ? (
+        {filteredExpenses.length === 0 ? (
           <EmptyState
             icon={Receipt}
             title="No expenses recorded"
-            description="Project expenses will appear here once projects have spending data."
+            description="Add the first expense entry to start tracking village spending."
           />
         ) : (
           <div className="overflow-x-auto">
@@ -162,10 +197,13 @@ export default function ExpensesPage() {
                   <th className="px-5 py-3.5 text-left text-xs font-semibold text-text-secondary uppercase tracking-wider">
                     Date
                   </th>
+                  <th className="px-5 py-3.5 text-left text-xs font-semibold text-text-secondary uppercase tracking-wider">
+                    Notes
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border-light">
-                {expenses.map((expense) => {
+                {filteredExpenses.map((expense) => {
                   const Icon = categoryIcons[expense.category] ?? Receipt;
                   return (
                     <tr
@@ -191,6 +229,9 @@ export default function ExpensesPage() {
                       <td className="px-5 py-4 text-sm text-text-muted">
                         {formatDate(expense.date)}
                       </td>
+                      <td className="px-5 py-4 text-sm text-text-secondary max-w-xs">
+                        <span className="line-clamp-2">{expense.notes || "-"}</span>
+                      </td>
                     </tr>
                   );
                 })}
@@ -199,6 +240,108 @@ export default function ExpensesPage() {
           </div>
         )}
       </div>
+
+      <FormModal
+        open={showCreateModal}
+        title="Add Expense"
+        onClose={() => {
+          setShowCreateModal(false);
+          resetForm();
+        }}
+        size="md"
+      >
+        <form onSubmit={handleCreateExpense} className="space-y-5">
+          <div>
+            <label className="block text-sm font-medium text-text-primary mb-1.5">
+              Project or Expense Title
+            </label>
+            <input
+              type="text"
+              value={project}
+              onChange={(e) => setProject(e.target.value)}
+              list="expense-project-options"
+              placeholder="e.g. Road Repair, School Materials"
+              className="w-full px-4 py-2.5 rounded-xl border border-border bg-background text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+            />
+            <datalist id="expense-project-options">
+              {projects.map((projectOption) => (
+                <option key={projectOption.id} value={projectOption.title} />
+              ))}
+            </datalist>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-text-primary mb-1.5">
+                Category
+              </label>
+              <select
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+                className="w-full px-4 py-2.5 rounded-xl border border-border bg-background text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+              >
+                {["Materials", "Labor", "Transport", "Equipment", "Other"].map(
+                  (option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  )
+                )}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-text-primary mb-1.5">
+                Amount
+              </label>
+              <input
+                type="number"
+                min="1"
+                step="1"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                placeholder="5000"
+                className="w-full px-4 py-2.5 rounded-xl border border-border bg-background text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-text-primary mb-1.5">
+              Notes
+            </label>
+            <textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              rows={4}
+              placeholder="Optional details about this expense"
+              className="w-full px-4 py-3 rounded-xl border border-border bg-background text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all resize-none"
+            />
+          </div>
+
+          {error && (
+            <p className="text-sm text-danger bg-danger-light px-4 py-3 rounded-xl">
+              {error}
+            </p>
+          )}
+
+          <div className="flex justify-end">
+            <button
+              type="submit"
+              disabled={saving}
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium bg-primary text-white hover:bg-primary-dark transition-all disabled:opacity-50"
+            >
+              {saving ? (
+                "Saving..."
+              ) : (
+                <>
+                  <Check className="w-4 h-4" />
+                  Save Expense
+                </>
+              )}
+            </button>
+          </div>
+        </form>
+      </FormModal>
     </div>
   );
 }
