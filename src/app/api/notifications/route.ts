@@ -47,45 +47,35 @@ export async function POST(req: NextRequest) {
 
   const body = (await req.json().catch(() => ({}))) as {
     title?: string;
-    description?: string;
-    location?: string;
-    photoUrl?: string;
-    status?: "Pending" | "Approved" | "Completed";
+    body?: string;
+    type?: string;
   };
 
   const title = String(body.title ?? "").trim();
-  const description = String(body.description ?? "").trim();
-  const location = String(body.location ?? "").trim();
-  const photoUrl = String(body.photoUrl ?? "").trim();
-  const status =
-    body.status === "Approved" || body.status === "Completed"
-      ? body.status
-      : "Pending";
+  const message = String(body.body ?? "").trim();
+  const type = String(body.type ?? "donation").trim();
 
   if (!title) {
     return NextResponse.json(
-      { error: "Problem title is required" },
+      { error: "Notification title is required" },
       { status: 400 }
     );
   }
 
-  if (!description) {
+  if (!message) {
     return NextResponse.json(
-      { error: "Problem description is required" },
+      { error: "Notification message is required" },
       { status: 400 }
     );
   }
 
-  await getAdminDb().collection("problems").add({
+  await getAdminDb().collection("notifications").add({
     title,
-    description,
-    location,
-    photoUrl,
-    status,
-    createdAt: FieldValue.serverTimestamp(),
-    reportedBy: verified.email,
-    reportedByName: "Admin",
+    body: message,
+    type,
     source: "admin",
+    createdAt: FieldValue.serverTimestamp(),
+    addedBy: verified.email,
   });
 
   return NextResponse.json({ ok: true });
@@ -105,12 +95,12 @@ export async function DELETE(req: NextRequest) {
 
   if (!id) {
     return NextResponse.json(
-      { error: "Problem id is required" },
+      { error: "Notification id is required" },
       { status: 400 }
     );
   }
 
-  await getAdminDb().collection("problems").doc(id).delete();
+  await getAdminDb().collection("notifications").doc(id).delete();
 
   return NextResponse.json({ ok: true });
 }

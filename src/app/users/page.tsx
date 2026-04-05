@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useMemo } from "react";
+import { useAuth } from "@/lib/AuthContext";
 import { useUsers } from "@/lib/hooks";
 import { blockUser } from "@/lib/firestore-service";
 import { LoadingSkeleton } from "@/components/LoadingSkeleton";
@@ -22,14 +23,31 @@ import {
   Droplets,
   Calendar,
   Home,
+  Plus,
+  Save,
 } from "lucide-react";
 
 export default function UsersPage() {
+  const { user } = useAuth();
   const { data: users, loading } = useUsers();
-  const [deleteId, setDeleteId] = useState<string | null>(null);
   const [blockTarget, setBlockTarget] = useState<Citizen | null>(null);
   const [viewUser, setViewUser] = useState<Citizen | null>(null);
   const [search, setSearch] = useState("");
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [createLoading, setCreateLoading] = useState(false);
+  const [createError, setCreateError] = useState("");
+  const [form, setForm] = useState({
+    name: "",
+    profession: "",
+    phone: "",
+    village: "",
+    email: "",
+    address: "",
+    nidNumber: "",
+    bloodGroup: "",
+    dateOfBirth: "",
+    photoUrl: "",
+  });
 
   const filtered = useMemo(() => {
     if (!search) return users;
@@ -43,6 +61,68 @@ export default function UsersPage() {
     );
   }, [users, search]);
 
+  const resetCreateForm = () => {
+    setForm({
+      name: "",
+      profession: "",
+      phone: "",
+      village: "",
+      email: "",
+      address: "",
+      nidNumber: "",
+      bloodGroup: "",
+      dateOfBirth: "",
+      photoUrl: "",
+    });
+    setCreateError("");
+  };
+
+  const handleCreateCitizen = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!form.name.trim()) {
+      setCreateError("Citizen name is required.");
+      return;
+    }
+
+    if (!form.phone.trim()) {
+      setCreateError("Phone number is required.");
+      return;
+    }
+
+    if (!form.village.trim()) {
+      setCreateError("Village name is required.");
+      return;
+    }
+
+    setCreateLoading(true);
+    setCreateError("");
+
+    try {
+      const token = await user?.getIdToken();
+      const res = await fetch("/api/users", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify(form),
+      });
+
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to add citizen");
+      }
+
+      resetCreateForm();
+      setShowCreateModal(false);
+    } catch (err: unknown) {
+      setCreateError(err instanceof Error ? err.message : "Failed to add citizen");
+    } finally {
+      setCreateLoading(false);
+    }
+  };
+
   if (loading) return <LoadingSkeleton />;
 
   return (
@@ -54,15 +134,24 @@ export default function UsersPage() {
             {users.length} registered citizens
           </p>
         </div>
-        <div className="relative w-72">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted" />
-          <input
-            type="text"
-            placeholder="Search by name, email, phone..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 bg-white rounded-xl border border-border text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
-          />
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="relative w-72">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted" />
+            <input
+              type="text"
+              placeholder="Search by name, email, phone..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full pl-10 pr-4 py-2.5 bg-white rounded-xl border border-border text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+            />
+          </div>
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium bg-primary text-white hover:bg-primary-dark transition-all"
+          >
+            <Plus className="w-4 h-4" />
+            Add Citizen
+          </button>
         </div>
       </div>
 
@@ -247,6 +336,174 @@ export default function UsersPage() {
         }}
         onCancel={() => setBlockTarget(null)}
       />
+
+      <FormModal
+        open={showCreateModal}
+        title="Add Citizen"
+        onClose={() => {
+          setShowCreateModal(false);
+          resetCreateForm();
+        }}
+        size="lg"
+      >
+        <form onSubmit={handleCreateCitizen} className="space-y-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-text-primary mb-1.5">
+                Full Name
+              </label>
+              <input
+                type="text"
+                value={form.name}
+                onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
+                placeholder="Citizen full name"
+                className="w-full px-4 py-2.5 rounded-xl border border-border bg-background text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-text-primary mb-1.5">
+                Profession
+              </label>
+              <input
+                type="text"
+                value={form.profession}
+                onChange={(e) => setForm((prev) => ({ ...prev, profession: e.target.value }))}
+                placeholder="Profession"
+                className="w-full px-4 py-2.5 rounded-xl border border-border bg-background text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-text-primary mb-1.5">
+                Phone Number
+              </label>
+              <input
+                type="text"
+                value={form.phone}
+                onChange={(e) => setForm((prev) => ({ ...prev, phone: e.target.value }))}
+                placeholder="Phone number"
+                className="w-full px-4 py-2.5 rounded-xl border border-border bg-background text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-text-primary mb-1.5">
+                Village
+              </label>
+              <input
+                type="text"
+                value={form.village}
+                onChange={(e) => setForm((prev) => ({ ...prev, village: e.target.value }))}
+                placeholder="Village name"
+                className="w-full px-4 py-2.5 rounded-xl border border-border bg-background text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-text-primary mb-1.5">
+                Email
+              </label>
+              <input
+                type="email"
+                value={form.email}
+                onChange={(e) => setForm((prev) => ({ ...prev, email: e.target.value }))}
+                placeholder="email@example.com"
+                className="w-full px-4 py-2.5 rounded-xl border border-border bg-background text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-text-primary mb-1.5">
+                NID Number
+              </label>
+              <input
+                type="text"
+                value={form.nidNumber}
+                onChange={(e) => setForm((prev) => ({ ...prev, nidNumber: e.target.value }))}
+                placeholder="NID number"
+                className="w-full px-4 py-2.5 rounded-xl border border-border bg-background text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-text-primary mb-1.5">
+                Blood Group
+              </label>
+              <input
+                type="text"
+                value={form.bloodGroup}
+                onChange={(e) => setForm((prev) => ({ ...prev, bloodGroup: e.target.value }))}
+                placeholder="e.g. A+"
+                className="w-full px-4 py-2.5 rounded-xl border border-border bg-background text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-text-primary mb-1.5">
+                Date of Birth
+              </label>
+              <input
+                type="date"
+                value={form.dateOfBirth}
+                onChange={(e) => setForm((prev) => ({ ...prev, dateOfBirth: e.target.value }))}
+                className="w-full px-4 py-2.5 rounded-xl border border-border bg-background text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-text-primary mb-1.5">
+              Address
+            </label>
+            <textarea
+              value={form.address}
+              onChange={(e) => setForm((prev) => ({ ...prev, address: e.target.value }))}
+              rows={3}
+              placeholder="Full address"
+              className="w-full px-4 py-3 rounded-xl border border-border bg-background text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all resize-none"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-text-primary mb-1.5">
+              Photo URL
+            </label>
+            <input
+              type="url"
+              value={form.photoUrl}
+              onChange={(e) => setForm((prev) => ({ ...prev, photoUrl: e.target.value }))}
+              placeholder="https://example.com/photo.jpg"
+              className="w-full px-4 py-2.5 rounded-xl border border-border bg-background text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+            />
+          </div>
+
+          {createError && (
+            <p className="text-sm text-danger bg-danger-light px-4 py-3 rounded-xl">
+              {createError}
+            </p>
+          )}
+
+          <div className="flex justify-end">
+            <button
+              type="submit"
+              disabled={createLoading}
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium bg-primary text-white hover:bg-primary-dark transition-all disabled:opacity-50"
+            >
+              {createLoading ? (
+                "Saving..."
+              ) : (
+                <>
+                  <Save className="w-4 h-4" />
+                  Save Citizen
+                </>
+              )}
+            </button>
+          </div>
+        </form>
+      </FormModal>
     </div>
   );
 }

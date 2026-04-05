@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getAdminAuth } from "@/lib/firebase-admin";
+import { getAdminAuth, getAdminDb, getAdminMessaging } from "@/lib/firebase-admin";
+import { isBootstrapAdminEmail, normalizeAdminEmail } from "@/lib/admin-access";
 
 const VALID_TYPES = ["donation", "problem", "citizen", "project"];
 
@@ -10,7 +11,15 @@ async function verifyAdmin(req: NextRequest): Promise<boolean> {
   try {
     const token = authHeader.slice(7);
     const decoded = await getAdminAuth().verifyIdToken(token);
-    return decoded.admin === true;
+    const email = normalizeAdminEmail(decoded.email ?? "");
+
+    if (decoded.admin === true || isBootstrapAdminEmail(email)) {
+      return true;
+    }
+
+    if (!email) return false;
+    const adminSnap = await getAdminDb().collection("admins").doc(email).get();
+    return adminSnap.exists;
   } catch {
     return false;
   }
@@ -35,33 +44,30 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid type" }, { status: 400 });
   }
 
-  const appId = process.env.ONESIGNAL_APP_ID;
-  const apiKey = process.env.ONESIGNAL_API_KEY;
+  try {
+    const result = await getAdminMessaging().send({
+      topic: "all",
+      notification: {
+        title,
+        body,
+      },
+      data: {
+        type,
+        title,
+        body,
+      },
+      android: {
+        priority: "high",
+        notification: {
+          channelId: "default",
+        },
+      },
+    });
 
-  if (!appId || !apiKey) {
-    return NextResponse.json({ error: "OneSignal not configured" }, { status: 500 });
+    return NextResponse.json({ success: true, messageId: result });
+  } catch (error: unknown) {
+    const message =
+      error instanceof Error ? error.message : "Firebase push notification failed";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
-
-  const res = await fetch("https://onesignal.com/api/v1/notifications", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Basic ${apiKey}`,
-    },
-    body: JSON.stringify({
-      app_id: appId,
-      included_segments: ["All"],
-      headings: { en: title },
-      contents: { en: body },
-      data: { type },
-    }),
-  });
-
-  const data = await res.json().catch(() => ({}));
-
-  if (!res.ok) {
-    return NextResponse.json({ error: data }, { status: res.status });
-  }
-
-  return NextResponse.json(data);
 }

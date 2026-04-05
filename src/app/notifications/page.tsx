@@ -1,26 +1,51 @@
 "use client";
 
 import React, { useState } from "react";
+import { getAuth } from "firebase/auth";
 import { useNotifications } from "@/lib/hooks";
-import {
-  createNotification,
-  deleteNotification,
-} from "@/lib/firestore-service";
 import { LoadingSkeleton } from "@/components/LoadingSkeleton";
 import { StatusBadge } from "@/components/StatusBadge";
-import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { FormModal } from "@/components/FormModal";
 import { EmptyState } from "@/components/EmptyState";
 import { relativeTime } from "@/lib/utils";
 import type { AppNotification } from "@/lib/models";
-import { Megaphone, Plus, Trash2, Send } from "lucide-react";
-import { sendPushNotification } from "@/lib/onesignal";
+import { Megaphone, Plus, Send } from "lucide-react";
+import { sendPushNotification } from "@/lib/push";
 
 type NotificationType = AppNotification["type"];
 
+async function callNotificationApi(
+  method: "POST" | "DELETE",
+  payload?: Record<string, unknown>
+) {
+  const user = getAuth().currentUser;
+  if (!user) {
+    throw new Error("You must be signed in as an admin");
+  }
+
+  const token = await user.getIdToken(true);
+  const url =
+    method === "DELETE" && payload?.id
+      ? `/api/notifications?id=${encodeURIComponent(String(payload.id))}`
+      : "/api/notifications";
+
+  const res = await fetch(url, {
+    method,
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: method === "POST" ? JSON.stringify(payload ?? {}) : undefined,
+  });
+
+  if (!res.ok) {
+    const data = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(data.error ?? "Notification request failed");
+  }
+}
+
 export default function NotificationsPage() {
   const { data: notifications, loading } = useNotifications();
-  const [deleteId, setDeleteId] = useState<string | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [form, setForm] = useState({
     title: "",
@@ -39,7 +64,7 @@ export default function NotificationsPage() {
     setError(null);
     setSuccess(false);
     try {
-      await createNotification(form);
+      await callNotificationApi("POST", form);
       const pushResult = await sendPushNotification({ title: form.title, body: form.body, type: form.type });
       if (!pushResult.success) {
         setError(`Notification saved but push failed: ${pushResult.error}`);
@@ -170,13 +195,6 @@ export default function NotificationsPage() {
                 <span className="text-xs text-text-muted whitespace-nowrap">
                   {relativeTime(notification.createdAt)}
                 </span>
-                <button
-                  onClick={() => setDeleteId(notification.id)}
-                  className="p-2 rounded-lg hover:bg-danger-light text-text-muted hover:text-danger transition-colors shrink-0"
-                  title="Delete"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
               </div>
             ))}
           </div>
@@ -253,17 +271,6 @@ export default function NotificationsPage() {
           </div>
         </form>
       </FormModal>
-
-      <ConfirmDialog
-        open={deleteId !== null}
-        title="Delete Notification"
-        message="Are you sure you want to delete this notification?"
-        onConfirm={async () => {
-          if (deleteId) await deleteNotification(deleteId);
-          setDeleteId(null);
-        }}
-        onCancel={() => setDeleteId(null)}
-      />
     </div>
   );
 }

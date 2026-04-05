@@ -63,19 +63,36 @@ export function subscribePaymentAccounts(
 ): Unsubscribe {
   return onSnapshot(doc(db, "villages", VILLAGE_DOC_ID), (snap) => {
     const d = snap.data() ?? {};
-    const raw = (d.paymentAccounts as Record<string, unknown>) ?? {};
-    const accounts: PaymentAccounts = {};
-    for (const [key, val] of Object.entries(raw)) {
-      if (val && typeof val === "object") {
-        const v = val as Record<string, unknown>;
-        accounts[key] = {
-          number: String(v.number ?? ""),
-          name: String(v.name ?? ""),
-          ...(v.bankName ? { bankName: String(v.bankName) } : {}),
-          ...(v.branch ? { branch: String(v.branch) } : {}),
-        };
+    const raw = d.paymentAccounts;
+    const accounts: PaymentAccounts = [];
+
+    if (Array.isArray(raw)) {
+      for (const val of raw) {
+        if (val && typeof val === "object") {
+          const v = val as Record<string, unknown>;
+          accounts.push({
+            id: String(v.id ?? crypto.randomUUID?.() ?? Date.now()),
+            type: String(v.type ?? "bank"),
+            number: String(v.number ?? ""),
+            name: String(v.name ?? ""),
+          });
+        }
+      }
+    } else {
+      const legacy = (raw as Record<string, unknown>) ?? {};
+      for (const [key, val] of Object.entries(legacy)) {
+        if (val && typeof val === "object") {
+          const v = val as Record<string, unknown>;
+          accounts.push({
+            id: String(v.id ?? key),
+            type: String(v.type ?? key).toLowerCase(),
+            number: String(v.number ?? ""),
+            name: String(v.name ?? ""),
+          });
+        }
       }
     }
+
     callback(accounts);
   });
 }
@@ -98,6 +115,8 @@ function mapDonation(id: string, d: DocumentData): Donation {
     donorName: (d.donorName as string) ?? "",
     amount: toNumber(d.amount),
     paymentMethod: (d.paymentMethod as string) ?? "",
+    receivedAccountId: (d.receivedAccountId as string) ?? "",
+    receivedAccountLabel: (d.receivedAccountLabel as string) ?? "",
     createdAt: toDate(d.createdAt),
     userId: (d.userId as string) ?? "",
     status: (d.status as Donation["status"]) ?? "Pending",

@@ -3,10 +3,9 @@
 import React, { useState } from "react";
 import { useAuth } from "@/lib/AuthContext";
 import { useProblems } from "@/lib/hooks";
-import { updateProblemStatus, deleteProblem } from "@/lib/firestore-service";
+import { updateProblemStatus } from "@/lib/firestore-service";
 import { LoadingSkeleton } from "@/components/LoadingSkeleton";
 import { StatusBadge } from "@/components/StatusBadge";
-import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { FormModal } from "@/components/FormModal";
 import { EmptyState } from "@/components/EmptyState";
 import { formatDate } from "@/lib/utils";
@@ -14,7 +13,6 @@ import type { ProblemReport } from "@/lib/models";
 import {
   AlertTriangle,
   CheckCircle2,
-  Trash2,
   MapPin,
   Calendar,
   User,
@@ -26,11 +24,11 @@ import {
 export default function ProblemsPage() {
   const { user } = useAuth();
   const { data: problems, loading } = useProblems();
-  const [deleteId, setDeleteId] = useState<string | null>(null);
   const [viewProblem, setViewProblem] = useState<ProblemReport | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [createLoading, setCreateLoading] = useState(false);
   const [createError, setCreateError] = useState("");
+  const [actionError, setActionError] = useState("");
   const [form, setForm] = useState({
     title: "",
     description: "",
@@ -113,6 +111,12 @@ export default function ProblemsPage() {
           Add Problem
         </button>
       </div>
+
+      {actionError && (
+        <div className="bg-danger-light border border-danger/20 text-danger rounded-xl px-4 py-3 text-sm animate-fade-in">
+          {actionError}
+        </div>
+      )}
 
       <div className="bg-white rounded-2xl border border-border overflow-hidden">
         {problems.length === 0 ? (
@@ -210,13 +214,6 @@ export default function ProblemsPage() {
                             <CheckCircle2 className="w-4 h-4" />
                           </button>
                         )}
-                        <button
-                          onClick={() => setDeleteId(problem.id)}
-                          className="p-2 rounded-lg hover:bg-danger-light text-text-muted hover:text-danger transition-colors"
-                          title="Delete"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
                       </div>
                     </td>
                   </tr>
@@ -304,31 +301,10 @@ export default function ProblemsPage() {
                   Mark Complete
                 </button>
               )}
-              <button
-                onClick={() => {
-                  setDeleteId(viewProblem.id);
-                  setViewProblem(null);
-                }}
-                className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-xl bg-danger-light text-danger hover:bg-danger/10 transition-colors"
-              >
-                <Trash2 className="w-4 h-4" />
-                Delete
-              </button>
             </div>
           </div>
         )}
       </FormModal>
-
-      <ConfirmDialog
-        open={deleteId !== null}
-        title="Delete Problem"
-        message="Are you sure you want to delete this problem report? This action cannot be undone."
-        onConfirm={async () => {
-          if (deleteId) await deleteProblem(deleteId);
-          setDeleteId(null);
-        }}
-        onCancel={() => setDeleteId(null)}
-      />
 
       <FormModal
         open={showCreateModal}

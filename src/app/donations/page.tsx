@@ -1,13 +1,9 @@
 "use client";
 
 import React, { useState, useMemo } from "react";
-import { useDonations } from "@/lib/hooks";
+import { useDonations, usePaymentAccounts } from "@/lib/hooks";
 import { useAuth } from "@/lib/AuthContext";
-import {
-  deleteDonation,
-  approveDonation,
-  rejectDonation,
-} from "@/lib/firestore-service";
+import { approveDonation, rejectDonation } from "@/lib/firestore-service";
 import { LoadingSkeleton } from "@/components/LoadingSkeleton";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { EmptyState } from "@/components/EmptyState";
@@ -15,10 +11,9 @@ import { FormModal } from "@/components/FormModal";
 import { StatusBadge } from "@/components/StatusBadge";
 import { ChartCard } from "@/components/ChartCard";
 import { formatBDT, formatDate } from "@/lib/utils";
-import { sendPushNotification } from "@/lib/onesignal";
+import { sendPushNotification } from "@/lib/push";
 import {
   HandCoins,
-  Trash2,
   CheckCircle,
   XCircle,
   Clock,
@@ -53,7 +48,7 @@ type StatusFilter = "all" | "Pending" | "Approved" | "Rejected";
 export default function DonationsPage() {
   const { user } = useAuth();
   const { data: donations, loading } = useDonations();
-  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const { data: paymentAccounts } = usePaymentAccounts();
   const [approveId, setApproveId] = useState<string | null>(null);
   const [rejectId, setRejectId] = useState<string | null>(null);
   const [filter, setFilter] = useState<FilterPeriod>("all");
@@ -64,14 +59,32 @@ export default function DonationsPage() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [createLoading, setCreateLoading] = useState(false);
   const [createError, setCreateError] = useState("");
+  const [actionError, setActionError] = useState("");
   const [form, setForm] = useState({
     donorName: "",
     amount: "",
-    paymentMethod: "Cash",
+    paymentTarget: "cash",
     senderNumber: "",
     transactionId: "",
     status: "Approved" as "Pending" | "Approved",
   });
+
+  const availableReceivingOptions = useMemo(
+    () => [
+      { value: "cash", label: "Cash" },
+      ...paymentAccounts.map((account) => ({
+        value: account.id,
+        label: [
+          account.type ? account.type.toUpperCase() : "Account",
+          account.number,
+          account.name,
+        ]
+          .filter(Boolean)
+          .join(" • "),
+      })),
+    ],
+    [paymentAccounts]
+  );
 
   const filtered = useMemo(() => {
     const now = new Date();
@@ -121,6 +134,7 @@ export default function DonationsPage() {
 
   const handleApprove = async (id: string) => {
     setActionLoading(id);
+    setActionError("");
     try {
       const donation = donations.find((d) => d.id === id);
       await approveDonation(id);
@@ -141,9 +155,13 @@ export default function DonationsPage() {
 
   const handleReject = async (id: string) => {
     setActionLoading(id);
+    setActionError("");
     try {
       await rejectDonation(id);
     } catch (err) {
+      setActionError(
+        err instanceof Error ? err.message : "Failed to reject donation"
+      );
       console.error("Failed to reject donation:", err);
     } finally {
       setActionLoading(null);
@@ -153,6 +171,7 @@ export default function DonationsPage() {
 
   const handleBulkApprove = async () => {
     const toApprove = pendingDonations.filter((d) => selectedIds.has(d.id));
+    setActionError("");
     for (const donation of toApprove) {
       try {
         await approveDonation(donation.id);
@@ -201,7 +220,7 @@ export default function DonationsPage() {
     setForm({
       donorName: "",
       amount: "",
-      paymentMethod: "Cash",
+      paymentTarget: "cash",
       senderNumber: "",
       transactionId: "",
       status: "Approved",
@@ -236,7 +255,7 @@ export default function DonationsPage() {
         body: JSON.stringify({
           donorName: form.donorName,
           amount,
-          paymentMethod: form.paymentMethod,
+          paymentTarget: form.paymentTarget,
           senderNumber: form.senderNumber,
           transactionId: form.transactionId,
           status: form.status,
@@ -324,6 +343,12 @@ export default function DonationsPage() {
           </div>
         </div>
       </div>
+
+      {actionError && (
+        <div className="bg-danger-light border border-danger/20 text-danger rounded-xl px-4 py-3 text-sm animate-fade-in">
+          {actionError}
+        </div>
+      )}
 
       {/* Summary Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -674,13 +699,6 @@ export default function DonationsPage() {
                               </button>
                             </>
                           )}
-                          <button
-                            onClick={() => setDeleteId(donation.id)}
-                            className="p-2 rounded-lg hover:bg-danger-light text-text-muted hover:text-danger transition-colors"
-                            title="Delete"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
                         </div>
                       </td>
                     </tr>
@@ -739,19 +757,6 @@ export default function DonationsPage() {
         onConfirm={handleBulkApprove}
         onCancel={() => setBulkApproveOpen(false)}
       />
-
-      {/* Delete Confirmation */}
-      <ConfirmDialog
-        open={deleteId !== null}
-        title="Delete Donation"
-        message="Are you sure you want to delete this donation? This action cannot be undone."
-        onConfirm={async () => {
-          if (deleteId) await deleteDonation(deleteId);
-          setDeleteId(null);
-        }}
-        onCancel={() => setDeleteId(null)}
-      />
-
       <FormModal
         open={showCreateModal}
         title="Add Donation"
@@ -817,22 +822,20 @@ export default function DonationsPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-text-primary mb-1.5">
-                Payment Method
+                Received In
               </label>
               <select
-                value={form.paymentMethod}
+                value={form.paymentTarget}
                 onChange={(e) =>
-                  setForm((prev) => ({ ...prev, paymentMethod: e.target.value }))
+                  setForm((prev) => ({ ...prev, paymentTarget: e.target.value }))
                 }
                 className="w-full px-4 py-2.5 rounded-xl border border-border bg-background text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
               >
-                {["Cash", "bKash", "Nagad", "Rocket", "Bank Transfer"].map(
-                  (method) => (
-                    <option key={method} value={method}>
-                      {method}
-                    </option>
-                  )
-                )}
+                {availableReceivingOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
               </select>
             </div>
             <div>

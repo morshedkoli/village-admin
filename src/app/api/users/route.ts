@@ -46,71 +46,88 @@ export async function POST(req: NextRequest) {
   }
 
   const body = (await req.json().catch(() => ({}))) as {
-    title?: string;
-    description?: string;
-    location?: string;
+    name?: string;
+    profession?: string;
+    phone?: string;
+    village?: string;
+    email?: string;
+    address?: string;
+    nidNumber?: string;
+    bloodGroup?: string;
+    dateOfBirth?: string;
     photoUrl?: string;
-    status?: "Pending" | "Approved" | "Completed";
   };
 
-  const title = String(body.title ?? "").trim();
-  const description = String(body.description ?? "").trim();
-  const location = String(body.location ?? "").trim();
+  const name = String(body.name ?? "").trim();
+  const profession = String(body.profession ?? "").trim();
+  const phone = String(body.phone ?? "").trim();
+  const village = String(body.village ?? "").trim();
+  const email = String(body.email ?? "").trim().toLowerCase();
+  const address = String(body.address ?? "").trim();
+  const nidNumber = String(body.nidNumber ?? "").trim();
+  const bloodGroup = String(body.bloodGroup ?? "").trim();
+  const dateOfBirth = String(body.dateOfBirth ?? "").trim();
   const photoUrl = String(body.photoUrl ?? "").trim();
-  const status =
-    body.status === "Approved" || body.status === "Completed"
-      ? body.status
-      : "Pending";
 
-  if (!title) {
+  if (!name) {
     return NextResponse.json(
-      { error: "Problem title is required" },
+      { error: "Citizen name is required" },
       { status: 400 }
     );
   }
 
-  if (!description) {
+  if (!phone) {
     return NextResponse.json(
-      { error: "Problem description is required" },
+      { error: "Phone number is required" },
       { status: 400 }
     );
   }
 
-  await getAdminDb().collection("problems").add({
-    title,
-    description,
-    location,
-    photoUrl,
-    status,
-    createdAt: FieldValue.serverTimestamp(),
-    reportedBy: verified.email,
-    reportedByName: "Admin",
-    source: "admin",
+  if (!village) {
+    return NextResponse.json(
+      { error: "Village name is required" },
+      { status: 400 }
+    );
+  }
+
+  if (email) {
+    const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailPattern.test(email)) {
+      return NextResponse.json(
+        { error: "Please enter a valid email address" },
+        { status: 400 }
+      );
+    }
+  }
+
+  const adminDb = getAdminDb();
+  const userRef = adminDb.collection("users").doc();
+  const villageRef = adminDb.collection("villages").doc("main_village");
+
+  await adminDb.runTransaction(async (tx) => {
+    tx.set(userRef, {
+      name,
+      profession,
+      phone,
+      village,
+      email,
+      address,
+      nidNumber,
+      bloodGroup,
+      dateOfBirth,
+      photoUrl,
+      isCitizen: true,
+      blocked: false,
+      addedBy: verified.email,
+      createdAt: FieldValue.serverTimestamp(),
+    });
+
+    tx.set(
+      villageRef,
+      { totalCitizens: FieldValue.increment(1) },
+      { merge: true }
+    );
   });
-
-  return NextResponse.json({ ok: true });
-}
-
-export async function DELETE(req: NextRequest) {
-  const verified = await verifyAdmin(req);
-  if (!verified.ok) {
-    return NextResponse.json(
-      { error: verified.error },
-      { status: verified.status }
-    );
-  }
-
-  const { searchParams } = new URL(req.url);
-  const id = searchParams.get("id")?.trim();
-
-  if (!id) {
-    return NextResponse.json(
-      { error: "Problem id is required" },
-      { status: 400 }
-    );
-  }
-
-  await getAdminDb().collection("problems").doc(id).delete();
 
   return NextResponse.json({ ok: true });
 }

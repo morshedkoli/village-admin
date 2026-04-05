@@ -129,7 +129,7 @@ export function useUserNotifications() {
 }
 
 export function usePaymentAccounts() {
-  const [data, setData] = useState<PaymentAccounts>({});
+  const [data, setData] = useState<PaymentAccounts>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {

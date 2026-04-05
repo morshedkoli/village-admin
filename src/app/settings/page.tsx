@@ -5,6 +5,7 @@ import { useVillageOverview, usePaymentAccounts } from "@/lib/hooks";
 import { availableBalance } from "@/lib/models";
 import type {
   AdminAccount,
+  PaymentAccount,
   PaymentAccounts as PaymentAccountsType,
 } from "@/lib/models";
 import { formatBDT } from "@/lib/utils";
@@ -29,7 +30,38 @@ import {
   Landmark,
   Bell,
   Plus,
+  Trash2,
 } from "lucide-react";
+
+function createEmptyAccount(): PaymentAccount {
+  return {
+    id:
+      typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : `account-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    type: "bkash",
+    number: "",
+    name: "",
+  };
+}
+
+const accountTypeOptions = [
+  { value: "bkash", label: "bKash", color: "#E2136E", icon: Smartphone },
+  { value: "nagad", label: "Nagad", color: "#FF6A00", icon: Smartphone },
+  { value: "bank", label: "Bank", color: "#1E40AF", icon: Landmark },
+  { value: "rocket", label: "Rocket", color: "#8B2FA0", icon: Smartphone },
+];
+
+function getAccountTypeMeta(type: string) {
+  return (
+    accountTypeOptions.find((option) => option.value === type) ?? {
+      value: type,
+      label: type || "Other",
+      color: "#6B7280",
+      icon: CreditCard,
+    }
+  );
+}
 
 export default function SettingsPage() {
   const { data: overview, loading } = useVillageOverview();
@@ -43,12 +75,7 @@ export default function SettingsPage() {
   const [editingVillageName, setEditingVillageName] = useState(false);
 
   // Payment accounts state
-  const [accounts, setAccounts] = useState<PaymentAccountsType>({
-    bKash: { number: "", name: "" },
-    Nagad: { number: "", name: "" },
-    Rocket: { number: "", name: "" },
-    Bank: { number: "", name: "", bankName: "", branch: "" },
-  });
+  const [accounts, setAccounts] = useState<PaymentAccountsType>([]);
   const [paSaving, setPaSaving] = useState(false);
   const [paSaved, setPaSaved] = useState(false);
   const [paError, setPaError] = useState("");
@@ -66,12 +93,7 @@ export default function SettingsPage() {
 
   useEffect(() => {
     if (!paLoaded && !paLoading) {
-      setAccounts({
-        bKash: paymentAccounts.bKash ?? { number: "", name: "" },
-        Nagad: paymentAccounts.Nagad ?? { number: "", name: "" },
-        Rocket: paymentAccounts.Rocket ?? { number: "", name: "" },
-        Bank: paymentAccounts.Bank ?? { number: "", name: "", bankName: "", branch: "" },
-      });
+      setAccounts(paymentAccounts);
       setPaLoaded(true);
     }
   }, [paymentAccounts, paLoading, paLoaded]);
@@ -167,14 +189,23 @@ export default function SettingsPage() {
   };
 
   const updateAccount = (
-    provider: string,
-    field: "number" | "name" | "bankName" | "branch",
+    id: string,
+    field: keyof Pick<PaymentAccount, "type" | "number" | "name">,
     value: string
   ) => {
-    setAccounts((prev) => ({
-      ...prev,
-      [provider]: { ...prev[provider], [field]: value },
-    }));
+    setAccounts((prev) =>
+      prev.map((account) =>
+        account.id === id ? { ...account, [field]: value } : account
+      )
+    );
+  };
+
+  const addAccount = () => {
+    setAccounts((prev) => [...prev, createEmptyAccount()]);
+  };
+
+  const removeAccount = (id: string) => {
+    setAccounts((prev) => prev.filter((account) => account.id !== id));
   };
 
   const handleSaveAccounts = async (e: React.FormEvent) => {
@@ -296,13 +327,6 @@ export default function SettingsPage() {
       ]
     : [];
 
-  const paymentMethods = [
-    { key: "bKash", label: "bKash", color: "#E2136E", isBank: false },
-    { key: "Nagad", label: "Nagad", color: "#FF6A00", isBank: false },
-    { key: "Rocket", label: "Rocket", color: "#8B2FA0", isBank: false },
-    { key: "Bank", label: "Bank Account", color: "#1E40AF", isBank: true },
-  ];
-
   return (
     <div className="space-y-6">
       <div>
@@ -420,75 +444,85 @@ export default function SettingsPage() {
               </div>
             </div>
             <form onSubmit={handleSaveAccounts} className="space-y-5">
-              {paymentMethods.map((method) => {
-                const account = accounts[method.key] ?? { number: "", name: "" };
-                const isActive = account.number.trim() !== "";
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  onClick={addAccount}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium bg-background border border-border text-text-primary hover:bg-surface-hover transition-all"
+                >
+                  <Plus className="w-4 h-4" />
+                  Add Account
+                </button>
+              </div>
+
+              {accounts.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-border px-4 py-8 text-center text-sm text-text-muted">
+                  No donation accounts added yet. Use <span className="font-medium text-text-primary">Add Account</span> to create one.
+                </div>
+              ) : (
+                accounts.map((account) => {
+                const meta = getAccountTypeMeta(account.type);
+                const Icon = meta.icon;
+                const isActive = account.number.trim() !== "" && account.name.trim() !== "";
                 return (
                   <div
-                    key={method.key}
+                    key={account.id}
                     className="rounded-xl border overflow-hidden"
-                    style={{ borderColor: `${method.color}33` }}
+                    style={{ borderColor: `${meta.color}33` }}
                   >
                     <div
                       className="flex items-center justify-between px-4 py-3"
-                      style={{ backgroundColor: `${method.color}0A` }}
+                      style={{ backgroundColor: `${meta.color}0A` }}
                     >
                       <div className="flex items-center gap-2.5">
                         <div
                           className="w-8 h-8 rounded-lg flex items-center justify-center"
-                          style={{ backgroundColor: `${method.color}1A` }}
+                          style={{ backgroundColor: `${meta.color}1A` }}
                         >
-                          {method.isBank ? (
-                            <Landmark className="w-4 h-4" style={{ color: method.color }} />
-                          ) : (
-                            <Smartphone className="w-4 h-4" style={{ color: method.color }} />
-                          )}
+                          <Icon className="w-4 h-4" style={{ color: meta.color }} />
                         </div>
-                        <span className="text-sm font-semibold" style={{ color: method.color }}>
-                          {method.label}
+                        <span className="text-sm font-semibold" style={{ color: meta.color }}>
+                          {meta.label}
                         </span>
                       </div>
-                      <span
-                        className={`text-xs font-medium px-2 py-0.5 rounded-md ${
-                          isActive
-                            ? "bg-[#ECFDF5] text-[#059669]"
-                            : "bg-[#FEF2F2] text-[#DC2626]"
-                        }`}
-                      >
-                        {isActive ? "Active" : "Not Set"}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`text-xs font-medium px-2 py-0.5 rounded-md ${
+                            isActive
+                              ? "bg-[#ECFDF5] text-[#059669]"
+                              : "bg-[#FEF2F2] text-[#DC2626]"
+                          }`}
+                        >
+                          {isActive ? "Active" : "Incomplete"}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => removeAccount(account.id)}
+                          className="p-2 rounded-lg hover:bg-white/70 text-text-muted hover:text-danger transition-colors"
+                          title="Remove account"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     </div>
-                    <div className="p-4 space-y-3">
-                      {method.isBank && (
-                        <>
-                          <div>
-                            <label className="block text-xs font-medium text-text-muted mb-1">
-                              Bank Name
-                            </label>
-                            <input
-                              type="text"
-                              value={account.bankName ?? ""}
-                              onChange={(e) => updateAccount(method.key, "bankName", e.target.value)}
-                              placeholder="e.g. Sonali Bank, Dutch Bangla Bank"
-                              className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm text-text-primary focus:outline-none focus:ring-2 focus:border-transparent transition-all"
-                              style={{ "--tw-ring-color": `${method.color}33` } as React.CSSProperties}
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-xs font-medium text-text-muted mb-1">
-                              Branch Name
-                            </label>
-                            <input
-                              type="text"
-                              value={account.branch ?? ""}
-                              onChange={(e) => updateAccount(method.key, "branch", e.target.value)}
-                              placeholder="e.g. Main Branch, Dhaka"
-                              className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm text-text-primary focus:outline-none focus:ring-2 focus:border-transparent transition-all"
-                              style={{ "--tw-ring-color": `${method.color}33` } as React.CSSProperties}
-                            />
-                          </div>
-                        </>
-                      )}
+                    <div className="p-4 grid grid-cols-1 md:grid-cols-3 gap-3">
+                      <div>
+                        <label className="block text-xs font-medium text-text-muted mb-1">
+                          Account Type
+                        </label>
+                        <select
+                          value={account.type}
+                          onChange={(e) => updateAccount(account.id, "type", e.target.value)}
+                          className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm text-text-primary focus:outline-none focus:ring-2 focus:border-transparent transition-all"
+                          style={{ "--tw-ring-color": `${meta.color}33` } as React.CSSProperties}
+                        >
+                          {accountTypeOptions.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
                       <div>
                         <label className="block text-xs font-medium text-text-muted mb-1">
                           Account Number
@@ -496,10 +530,10 @@ export default function SettingsPage() {
                         <input
                           type="text"
                           value={account.number}
-                          onChange={(e) => updateAccount(method.key, "number", e.target.value)}
+                          onChange={(e) => updateAccount(account.id, "number", e.target.value)}
                           placeholder="e.g. 01XXXXXXXXX"
                           className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm text-text-primary focus:outline-none focus:ring-2 focus:border-transparent transition-all"
-                          style={{ "--tw-ring-color": `${method.color}33` } as React.CSSProperties}
+                          style={{ "--tw-ring-color": `${meta.color}33` } as React.CSSProperties}
                         />
                       </div>
                       <div>
@@ -509,16 +543,17 @@ export default function SettingsPage() {
                         <input
                           type="text"
                           value={account.name}
-                          onChange={(e) => updateAccount(method.key, "name", e.target.value)}
+                          onChange={(e) => updateAccount(account.id, "name", e.target.value)}
                           placeholder="Account holder name"
                           className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm text-text-primary focus:outline-none focus:ring-2 focus:border-transparent transition-all"
-                          style={{ "--tw-ring-color": `${method.color}33` } as React.CSSProperties}
+                          style={{ "--tw-ring-color": `${meta.color}33` } as React.CSSProperties}
                         />
                       </div>
                     </div>
                   </div>
                 );
-              })}
+              })
+              )}
               <button
                 type="submit"
                 disabled={paSaving}
@@ -546,7 +581,7 @@ export default function SettingsPage() {
             </form>
           </div>
 
-          {/* OneSignal Push Notifications */}
+          {/* Firebase Push Notifications */}
           <div className="bg-white rounded-2xl border border-border p-6">
             <div className="flex items-center gap-3 mb-6">
               <div className="w-10 h-10 rounded-xl bg-[#E8F5FF] flex items-center justify-center">
@@ -554,19 +589,19 @@ export default function SettingsPage() {
               </div>
               <div>
                 <h2 className="text-base font-semibold text-text-primary">
-                  Push Notifications (OneSignal)
+                  Push Notifications (Firebase)
                 </h2>
                 <p className="text-xs text-text-muted">
-                  OneSignal credentials are configured via server environment variables
+                  Firebase Cloud Messaging is handled server-side with the Firebase Admin SDK
                 </p>
               </div>
             </div>
             <div className="bg-background rounded-xl p-4 text-sm text-text-secondary space-y-2">
               <p>
-                Push notification credentials are now managed server-side via <code className="bg-border/50 px-1.5 py-0.5 rounded text-xs font-mono">.env.local</code> for security.
+                Admin broadcasts now use Firebase Cloud Messaging instead of OneSignal.
               </p>
               <p className="text-xs text-text-muted">
-                Set <code className="font-mono">ONESIGNAL_APP_ID</code> and <code className="font-mono">ONESIGNAL_API_KEY</code> in your environment variables.
+                Client apps should subscribe to the <code className="font-mono">all</code> topic to receive admin notifications.
               </p>
             </div>
           </div>

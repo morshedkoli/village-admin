@@ -48,14 +48,14 @@ export async function POST(req: NextRequest) {
   const body = (await req.json().catch(() => ({}))) as {
     donorName?: string;
     amount?: number;
-    paymentMethod?: string;
+    paymentTarget?: string;
     senderNumber?: string;
     transactionId?: string;
     status?: "Pending" | "Approved";
   };
 
   const donorName = String(body.donorName ?? "").trim();
-  const paymentMethod = String(body.paymentMethod ?? "").trim();
+  const paymentTarget = String(body.paymentTarget ?? "").trim();
   const senderNumber = String(body.senderNumber ?? "").trim();
   const transactionId = String(body.transactionId ?? "").trim();
   const status = body.status === "Pending" ? "Pending" : "Approved";
@@ -68,9 +68,9 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  if (!paymentMethod) {
+  if (!paymentTarget) {
     return NextResponse.json(
-      { error: "Payment method is required" },
+      { error: "Please select a receiving account or cash" },
       { status: 400 }
     );
   }
@@ -85,12 +85,45 @@ export async function POST(req: NextRequest) {
   const adminDb = getAdminDb();
   const donationRef = adminDb.collection("donations").doc();
   const villageRef = adminDb.collection("villages").doc("main_village");
+  const villageSnap = await adminDb.collection("villages").doc("main_village").get();
+  const paymentAccounts = Array.isArray(villageSnap.data()?.paymentAccounts)
+    ? (villageSnap.data()?.paymentAccounts as Array<Record<string, unknown>>)
+    : [];
+
+  let paymentMethod = "Cash";
+  let receivedAccountId = "";
+  let receivedAccountLabel = "Cash";
+
+  if (paymentTarget !== "cash") {
+    const account = paymentAccounts.find(
+      (entry) => String(entry.id ?? "") === paymentTarget
+    );
+
+    if (!account) {
+      return NextResponse.json(
+        { error: "Selected receiving account is no longer available" },
+        { status: 400 }
+      );
+    }
+
+    const accountType = String(account.type ?? "").trim();
+    const accountNumber = String(account.number ?? "").trim();
+    const holderName = String(account.name ?? "").trim();
+
+    paymentMethod = accountType || "Account";
+    receivedAccountId = String(account.id ?? "");
+    receivedAccountLabel = [accountType, accountNumber, holderName]
+      .filter(Boolean)
+      .join(" • ");
+  }
 
   await adminDb.runTransaction(async (tx) => {
     tx.set(donationRef, {
       donorName,
       amount,
       paymentMethod,
+      receivedAccountId,
+      receivedAccountLabel,
       senderNumber,
       transactionId,
       userId: "",
@@ -124,6 +157,30 @@ export async function POST(req: NextRequest) {
       });
     }
   });
+
+  return NextResponse.json({ ok: true });
+}
+
+export async function DELETE(req: NextRequest) {
+  const verified = await verifyAdmin(req);
+  if (!verified.ok) {
+    return NextResponse.json(
+      { error: verified.error },
+      { status: verified.status }
+    );
+  }
+
+  const { searchParams } = new URL(req.url);
+  const id = searchParams.get("id")?.trim();
+
+  if (!id) {
+    return NextResponse.json(
+      { error: "Donation id is required" },
+      { status: 400 }
+    );
+  }
+
+  await getAdminDb().collection("donations").doc(id).delete();
 
   return NextResponse.json({ ok: true });
 }

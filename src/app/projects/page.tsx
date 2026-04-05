@@ -1,20 +1,15 @@
 "use client";
 
 import React, { useState } from "react";
+import { getAuth } from "firebase/auth";
 import { useProjects } from "@/lib/hooks";
-import {
-  createProject,
-  updateProject,
-  deleteProject,
-} from "@/lib/firestore-service";
 import { LoadingSkeleton } from "@/components/LoadingSkeleton";
 import { StatusBadge } from "@/components/StatusBadge";
-import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { FormModal } from "@/components/FormModal";
 import { EmptyState } from "@/components/EmptyState";
 import { formatBDT, formatDate } from "@/lib/utils";
 import type { DevelopmentProject } from "@/lib/models";
-import { Plus, Pencil, Trash2, FolderKanban } from "lucide-react";
+import { Plus, Pencil, FolderKanban } from "lucide-react";
 
 type ProjectStatus = DevelopmentProject["status"];
 
@@ -31,11 +26,11 @@ const defaultForm = {
 
 export default function ProjectsPage() {
   const { data: projects, loading } = useProjects();
-  const [deleteId, setDeleteId] = useState<string | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState(defaultForm);
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
 
   if (loading) return <LoadingSkeleton />;
 
@@ -63,13 +58,28 @@ export default function ProjectsPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
+    setError("");
     try {
-      if (editingId) {
-        await updateProject(editingId, form);
-      } else {
-        await createProject(form);
+      const user = getAuth().currentUser;
+      if (!user) {
+        throw new Error("You must be signed in as an admin");
+      }
+      const token = await user.getIdToken(true);
+      const res = await fetch("/api/projects", {
+        method: editingId ? "PATCH" : "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(editingId ? { id: editingId, ...form } : form),
+      });
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to save project");
       }
       setFormOpen(false);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to save project");
     } finally {
       setSaving(false);
     }
@@ -95,6 +105,12 @@ export default function ProjectsPage() {
           New Project
         </button>
       </div>
+
+      {error && (
+        <div className="bg-danger-light border border-danger/20 text-danger rounded-xl px-4 py-3 text-sm animate-fade-in">
+          {error}
+        </div>
+      )}
 
       <div className="bg-white rounded-2xl border border-border overflow-hidden">
         {projects.length === 0 ? (
@@ -170,13 +186,6 @@ export default function ProjectsPage() {
                           title="Edit"
                         >
                           <Pencil className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => setDeleteId(project.id)}
-                          className="p-2 rounded-lg hover:bg-danger-light text-text-muted hover:text-danger transition-colors"
-                          title="Delete"
-                        >
-                          <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
                     </td>
@@ -283,17 +292,6 @@ export default function ProjectsPage() {
           </div>
         </form>
       </FormModal>
-
-      <ConfirmDialog
-        open={deleteId !== null}
-        title="Delete Project"
-        message="Are you sure you want to delete this project? This action cannot be undone."
-        onConfirm={async () => {
-          if (deleteId) await deleteProject(deleteId);
-          setDeleteId(null);
-        }}
-        onCancel={() => setDeleteId(null)}
-      />
     </div>
   );
 }
