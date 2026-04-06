@@ -1,12 +1,10 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { useVillageOverview, usePaymentAccounts } from "@/lib/hooks";
+import { useVillageOverview } from "@/lib/hooks";
 import { availableBalance } from "@/lib/models";
 import type {
   AdminAccount,
-  PaymentAccount,
-  PaymentAccounts as PaymentAccountsType,
 } from "@/lib/models";
 import { formatBDT } from "@/lib/utils";
 import { LoadingSkeleton } from "@/components/LoadingSkeleton";
@@ -25,47 +23,13 @@ import {
   Shield,
   Mail,
   User as UserIcon,
-  CreditCard,
-  Smartphone,
-  Landmark,
   Bell,
   Plus,
   Trash2,
 } from "lucide-react";
 
-function createEmptyAccount(): PaymentAccount {
-  return {
-    id:
-      typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
-        ? crypto.randomUUID()
-        : `account-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-    type: "bkash",
-    number: "",
-    name: "",
-  };
-}
-
-const accountTypeOptions = [
-  { value: "bkash", label: "bKash", color: "#E2136E", icon: Smartphone },
-  { value: "nagad", label: "Nagad", color: "#FF6A00", icon: Smartphone },
-  { value: "bank", label: "Bank", color: "#1E40AF", icon: Landmark },
-  { value: "rocket", label: "Rocket", color: "#8B2FA0", icon: Smartphone },
-];
-
-function getAccountTypeMeta(type: string) {
-  return (
-    accountTypeOptions.find((option) => option.value === type) ?? {
-      value: type,
-      label: type || "Other",
-      color: "#6B7280",
-      icon: CreditCard,
-    }
-  );
-}
-
 export default function SettingsPage() {
   const { data: overview, loading } = useVillageOverview();
-  const { data: paymentAccounts, loading: paLoading } = usePaymentAccounts();
   const { user } = useAuth();
   const [villageName, setVillageName] = useState("");
   const [saving, setSaving] = useState(false);
@@ -74,12 +38,6 @@ export default function SettingsPage() {
   const [error, setError] = useState("");
   const [editingVillageName, setEditingVillageName] = useState(false);
 
-  // Payment accounts state
-  const [accounts, setAccounts] = useState<PaymentAccountsType>([]);
-  const [paSaving, setPaSaving] = useState(false);
-  const [paSaved, setPaSaved] = useState(false);
-  const [paError, setPaError] = useState("");
-  const [paLoaded, setPaLoaded] = useState(false);
   const [adminEmail, setAdminEmail] = useState("");
   const [adminSaving, setAdminSaving] = useState(false);
   const [adminSaved, setAdminSaved] = useState(false);
@@ -90,13 +48,6 @@ export default function SettingsPage() {
   useEffect(() => {
     if (overview && !editingVillageName) setVillageName(overview.name);
   }, [overview, editingVillageName]);
-
-  useEffect(() => {
-    if (!paLoaded && !paLoading) {
-      setAccounts(paymentAccounts);
-      setPaLoaded(true);
-    }
-  }, [paymentAccounts, paLoading, paLoaded]);
 
   useEffect(() => {
     const loadAdmins = async () => {
@@ -185,57 +136,6 @@ export default function SettingsPage() {
     } finally {
       setSaving(false);
       setShowConfirm(false);
-    }
-  };
-
-  const updateAccount = (
-    id: string,
-    field: keyof Pick<PaymentAccount, "type" | "number" | "name">,
-    value: string
-  ) => {
-    setAccounts((prev) =>
-      prev.map((account) =>
-        account.id === id ? { ...account, [field]: value } : account
-      )
-    );
-  };
-
-  const addAccount = () => {
-    setAccounts((prev) => [...prev, createEmptyAccount()]);
-  };
-
-  const removeAccount = (id: string) => {
-    setAccounts((prev) => prev.filter((account) => account.id !== id));
-  };
-
-  const handleSaveAccounts = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setPaSaving(true);
-    setPaError("");
-    try {
-      const token = await user?.getIdToken();
-      const res = await fetch("/api/settings", {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({ paymentAccounts: accounts }),
-      });
-
-      const data = (await res.json().catch(() => ({}))) as { error?: string };
-      if (!res.ok) {
-        throw new Error(data.error || "Failed to update payment accounts");
-      }
-
-      setPaSaved(true);
-      setTimeout(() => setPaSaved(false), 2000);
-    } catch (err: unknown) {
-      const msg =
-        err instanceof Error ? err.message : "Failed to update payment accounts";
-      setPaError(msg);
-    } finally {
-      setPaSaving(false);
     }
   };
 
@@ -423,159 +323,6 @@ export default function SettingsPage() {
               {error && (
                 <p className="text-sm text-danger bg-danger-light px-4 py-3 rounded-xl">
                   {error}
-                </p>
-              )}
-            </form>
-          </div>
-
-          {/* Donation Account Settings */}
-          <div className="bg-white rounded-2xl border border-border p-6">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="w-10 h-10 rounded-xl bg-[#FFF4E6] flex items-center justify-center">
-                <CreditCard className="w-5 h-5 text-[#FF9500]" />
-              </div>
-              <div>
-                <h2 className="text-base font-semibold text-text-primary">
-                  Donation Account Numbers
-                </h2>
-                <p className="text-xs text-text-muted">
-                  Citizens will see these accounts when donating
-                </p>
-              </div>
-            </div>
-            <form onSubmit={handleSaveAccounts} className="space-y-5">
-              <div className="flex justify-end">
-                <button
-                  type="button"
-                  onClick={addAccount}
-                  className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium bg-background border border-border text-text-primary hover:bg-surface-hover transition-all"
-                >
-                  <Plus className="w-4 h-4" />
-                  Add Account
-                </button>
-              </div>
-
-              {accounts.length === 0 ? (
-                <div className="rounded-xl border border-dashed border-border px-4 py-8 text-center text-sm text-text-muted">
-                  No donation accounts added yet. Use <span className="font-medium text-text-primary">Add Account</span> to create one.
-                </div>
-              ) : (
-                accounts.map((account) => {
-                const meta = getAccountTypeMeta(account.type);
-                const Icon = meta.icon;
-                const isActive = account.number.trim() !== "" && account.name.trim() !== "";
-                return (
-                  <div
-                    key={account.id}
-                    className="rounded-xl border overflow-hidden"
-                    style={{ borderColor: `${meta.color}33` }}
-                  >
-                    <div
-                      className="flex items-center justify-between px-4 py-3"
-                      style={{ backgroundColor: `${meta.color}0A` }}
-                    >
-                      <div className="flex items-center gap-2.5">
-                        <div
-                          className="w-8 h-8 rounded-lg flex items-center justify-center"
-                          style={{ backgroundColor: `${meta.color}1A` }}
-                        >
-                          <Icon className="w-4 h-4" style={{ color: meta.color }} />
-                        </div>
-                        <span className="text-sm font-semibold" style={{ color: meta.color }}>
-                          {meta.label}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span
-                          className={`text-xs font-medium px-2 py-0.5 rounded-md ${
-                            isActive
-                              ? "bg-[#ECFDF5] text-[#059669]"
-                              : "bg-[#FEF2F2] text-[#DC2626]"
-                          }`}
-                        >
-                          {isActive ? "Active" : "Incomplete"}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => removeAccount(account.id)}
-                          className="p-2 rounded-lg hover:bg-white/70 text-text-muted hover:text-danger transition-colors"
-                          title="Remove account"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </div>
-                    <div className="p-4 grid grid-cols-1 md:grid-cols-3 gap-3">
-                      <div>
-                        <label className="block text-xs font-medium text-text-muted mb-1">
-                          Account Type
-                        </label>
-                        <select
-                          value={account.type}
-                          onChange={(e) => updateAccount(account.id, "type", e.target.value)}
-                          className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm text-text-primary focus:outline-none focus:ring-2 focus:border-transparent transition-all"
-                          style={{ "--tw-ring-color": `${meta.color}33` } as React.CSSProperties}
-                        >
-                          {accountTypeOptions.map((option) => (
-                            <option key={option.value} value={option.value}>
-                              {option.label}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-xs font-medium text-text-muted mb-1">
-                          Account Number
-                        </label>
-                        <input
-                          type="text"
-                          value={account.number}
-                          onChange={(e) => updateAccount(account.id, "number", e.target.value)}
-                          placeholder="e.g. 01XXXXXXXXX"
-                          className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm text-text-primary focus:outline-none focus:ring-2 focus:border-transparent transition-all"
-                          style={{ "--tw-ring-color": `${meta.color}33` } as React.CSSProperties}
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-medium text-text-muted mb-1">
-                          Account Holder Name
-                        </label>
-                        <input
-                          type="text"
-                          value={account.name}
-                          onChange={(e) => updateAccount(account.id, "name", e.target.value)}
-                          placeholder="Account holder name"
-                          className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm text-text-primary focus:outline-none focus:ring-2 focus:border-transparent transition-all"
-                          style={{ "--tw-ring-color": `${meta.color}33` } as React.CSSProperties}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                );
-              })
-              )}
-              <button
-                type="submit"
-                disabled={paSaving}
-                className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium bg-[#FF9500] text-white hover:bg-[#E68600] transition-all disabled:opacity-50"
-              >
-                {paSaved ? (
-                  <>
-                    <Check className="w-4 h-4" />
-                    Saved!
-                  </>
-                ) : paSaving ? (
-                  "Saving..."
-                ) : (
-                  <>
-                    <Save className="w-4 h-4" />
-                    Save Account Settings
-                  </>
-                )}
-              </button>
-              {paError && (
-                <p className="text-sm text-danger bg-danger-light px-4 py-3 rounded-xl">
-                  {paError}
                 </p>
               )}
             </form>

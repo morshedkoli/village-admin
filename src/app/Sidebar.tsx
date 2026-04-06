@@ -19,6 +19,7 @@ import {
   LogOut,
   ChevronLeft,
   ChevronRight,
+  CreditCard,
 } from "lucide-react";
 
 const navItems = [
@@ -28,6 +29,7 @@ const navItems = [
   { name: "Problems", href: "/problems", icon: AlertTriangle },
   { name: "Expenses", href: "/expenses", icon: Receipt },
   { name: "Donations", href: "/donations", icon: HandCoins },
+  { name: "Donation Accounts", href: "/donation-accounts", icon: CreditCard },
   { name: "Citizens", href: "/users", icon: Users },
   { name: "Notifications", href: "/notifications", icon: Megaphone },
   { name: "Reports", href: "/reports", icon: FileBarChart },
