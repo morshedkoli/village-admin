@@ -138,8 +138,22 @@ export default function DonationsPage() {
     setActionLoading(id);
     setActionError("");
     try {
+      const token = await user?.getIdToken();
+      const res = await fetch("/api/donations", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ id, action: "approve" }),
+      });
+
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to approve donation");
+      }
+
       const donation = donations.find((d) => d.id === id);
-      await approveDonation(id);
       if (donation) {
         await sendPushNotification({
           title: "নতুন অনুদান",
@@ -147,7 +161,10 @@ export default function DonationsPage() {
           type: "donation",
         });
       }
-    } catch (err) {
+    } catch (err: unknown) {
+      setActionError(
+        err instanceof Error ? err.message : "Failed to approve donation"
+      );
       console.error("Failed to approve donation:", err);
     } finally {
       setActionLoading(null);
@@ -159,8 +176,21 @@ export default function DonationsPage() {
     setActionLoading(id);
     setActionError("");
     try {
-      await rejectDonation(id);
-    } catch (err) {
+      const token = await user?.getIdToken();
+      const res = await fetch("/api/donations", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ id, action: "reject" }),
+      });
+
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to reject donation");
+      }
+    } catch (err: unknown) {
       setActionError(
         err instanceof Error ? err.message : "Failed to reject donation"
       );
@@ -173,21 +203,44 @@ export default function DonationsPage() {
 
   const handleBulkApprove = async () => {
     const toApprove = pendingDonations.filter((d) => selectedIds.has(d.id));
+    if (toApprove.length === 0) return;
+
     setActionError("");
+    const token = await user?.getIdToken();
+    let successCount = 0;
+    let totalApproved = 0;
+
     for (const donation of toApprove) {
       try {
-        await approveDonation(donation.id);
+        const res = await fetch("/api/donations", {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({ id: donation.id, action: "approve" }),
+        });
+
+        if (res.ok) {
+          successCount++;
+          totalApproved += donation.amount;
+        } else {
+          const data = (await res.json().catch(() => ({}))) as { error?: string };
+          console.error(`Failed to approve donation ${donation.id}:`, data.error);
+        }
       } catch (err) {
-        console.error("Failed to approve donation:", donation.id, err);
+        console.error(`Failed to approve donation ${donation.id}:`, err);
       }
     }
-    if (toApprove.length > 0) {
+
+    if (successCount > 0) {
       await sendPushNotification({
         title: "নতুন অনুদান",
-        body: `${toApprove.length}টি অনুদান অনুমোদিত হয়েছে — মোট ৳${toApprove.reduce((s, d) => s + d.amount, 0)}`,
+        body: `${successCount}টি অনুদান অনুমোদিত হয়েছে — মোট ৳${totalApproved}`,
         type: "donation",
       });
     }
+
     setSelectedIds(new Set());
     setBulkApproveOpen(false);
   };

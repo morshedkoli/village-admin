@@ -37,14 +37,18 @@ const VILLAGE_DOC_ID = "main_village";
 export function subscribeVillageOverview(
   callback: (data: VillageOverview) => void
 ): Unsubscribe {
-  return onSnapshot(doc(db, "villages", VILLAGE_DOC_ID), (snap) => {
+  return onSnapshot(
+    doc(db, "villages", VILLAGE_DOC_ID), 
+    (snap) => {
     const d = snap.data() ?? {};
     callback({
       name: (d.name as string) ?? "Our Village",
       totalCitizens: toNumber(d.totalCitizens),
       totalFundCollected: toNumber(d.totalFundCollected),
       totalSpent: toNumber(d.totalSpent),
-    });
+    },
+    (error) => { console.warn("Village listener error:", error.message); }
+  );
   });
 }
 
@@ -61,40 +65,46 @@ export async function updateVillageOverview(
 export function subscribePaymentAccounts(
   callback: (accounts: PaymentAccounts) => void
 ): Unsubscribe {
-  return onSnapshot(doc(db, "villages", VILLAGE_DOC_ID), (snap) => {
-    const d = snap.data() ?? {};
-    const raw = d.paymentAccounts;
-    const accounts: PaymentAccounts = [];
+  return onSnapshot(
+    doc(db, "villages", VILLAGE_DOC_ID),
+    (snap) => {
+      const d = snap.data() ?? {};
+      const raw = d.paymentAccounts;
+      const accounts: PaymentAccounts = [];
 
-    if (Array.isArray(raw)) {
-      for (const val of raw) {
-        if (val && typeof val === "object") {
-          const v = val as Record<string, unknown>;
-          accounts.push({
-            id: String(v.id ?? crypto.randomUUID?.() ?? Date.now()),
-            type: String(v.type ?? "bank"),
-            number: String(v.number ?? ""),
-            name: String(v.name ?? ""),
-          });
+      if (Array.isArray(raw)) {
+        for (const val of raw) {
+          if (val && typeof val === "object") {
+            const v = val as Record<string, unknown>;
+            accounts.push({
+              id: String(v.id ?? crypto.randomUUID?.() ?? Date.now()),
+              type: String(v.type ?? "bank"),
+              number: String(v.number ?? ""),
+              name: String(v.name ?? ""),
+            });
+          }
+        }
+      } else {
+        const legacy = (raw as Record<string, unknown>) ?? {};
+        for (const [key, val] of Object.entries(legacy)) {
+          if (val && typeof val === "object") {
+            const v = val as Record<string, unknown>;
+            accounts.push({
+              id: String(v.id ?? key),
+              type: String(v.type ?? key).toLowerCase(),
+              number: String(v.number ?? ""),
+              name: String(v.name ?? ""),
+            });
+          }
         }
       }
-    } else {
-      const legacy = (raw as Record<string, unknown>) ?? {};
-      for (const [key, val] of Object.entries(legacy)) {
-        if (val && typeof val === "object") {
-          const v = val as Record<string, unknown>;
-          accounts.push({
-            id: String(v.id ?? key),
-            type: String(v.type ?? key).toLowerCase(),
-            number: String(v.number ?? ""),
-            name: String(v.name ?? ""),
-          });
-        }
-      }
+
+      callback(accounts);
+    },
+    (error) => {
+      console.warn("Payment accounts listener error:", error.message);
     }
-
-    callback(accounts);
-  });
+  );
 }
 
 export async function updatePaymentAccounts(
@@ -133,9 +143,11 @@ export function subscribeDonations(
     orderBy("createdAt", "desc"),
     limit(200)
   );
-  return onSnapshot(q, (snap) => {
-    callback(snap.docs.map((doc) => mapDonation(doc.id, doc.data())));
-  });
+  return onSnapshot(
+    q, 
+    (snap) => { callback(snap.docs.map((doc) => mapDonation(doc.id, doc.data()))); },
+    (error) => { console.warn("Donations listener error:", error.message); }
+  );
 }
 
 export async function deleteDonation(id: string): Promise<void> {
@@ -201,9 +213,11 @@ export function subscribeProjects(
     orderBy("createdAt", "desc"),
     limit(200)
   );
-  return onSnapshot(q, (snap) => {
-    callback(snap.docs.map((doc) => mapProject(doc.id, doc.data())));
-  });
+  return onSnapshot(
+    q, 
+    (snap) => { callback(snap.docs.map((doc) => mapProject(doc.id, doc.data()))); },
+    (error) => { console.warn("Projects listener error:", error.message); }
+  );
 }
 
 export async function createProject(
@@ -252,9 +266,11 @@ export function subscribeProblems(
     orderBy("createdAt", "desc"),
     limit(200)
   );
-  return onSnapshot(q, (snap) => {
-    callback(snap.docs.map((doc) => mapProblem(doc.id, doc.data())));
-  });
+  return onSnapshot(
+    q, 
+    (snap) => { callback(snap.docs.map((doc) => mapProblem(doc.id, doc.data()))); },
+    (error) => { console.warn("Problems listener error:", error.message); }
+  );
 }
 
 export async function updateProblemStatus(
@@ -385,18 +401,24 @@ export function subscribeExpenses(
     limit(200)
   );
 
-  return onSnapshot(q, (snap) => {
-    callback(
-      sortExpensesByDate(
-        snap.docs
-          .map((expenseDoc) => mapExpense(expenseDoc.id, expenseDoc.data()))
-          .filter((expenseDoc) => {
-            const raw = snap.docs.find((doc) => doc.id === expenseDoc.id)?.data();
-            return raw?.type === "expense";
-          })
-      )
-    );
-  });
+  return onSnapshot(
+    q,
+    (snap) => {
+      callback(
+        sortExpensesByDate(
+          snap.docs
+            .map((expenseDoc) => mapExpense(expenseDoc.id, expenseDoc.data()))
+            .filter((expenseDoc) => {
+              const raw = snap.docs.find((doc) => doc.id === expenseDoc.id)?.data();
+              return raw?.type === "expense";
+            })
+        )
+      );
+    },
+    (error) => {
+      console.warn("Expenses listener error:", error.message);
+    }
+  );
 }
 
 export async function createExpense(data: {
@@ -462,13 +484,19 @@ export function subscribeNotifications(
     orderBy("createdAt", "desc"),
     limit(200)
   );
-  return onSnapshot(q, (snap) => {
-    callback(
-      sortNotificationsByCreatedAt(
-        snap.docs.map((doc) => mapNotification(doc.id, doc.data()))
-      )
-    );
-  });
+  return onSnapshot(
+    q,
+    (snap) => {
+      callback(
+        sortNotificationsByCreatedAt(
+          snap.docs.map((doc) => mapNotification(doc.id, doc.data()))
+        )
+      );
+    },
+    (error) => {
+      console.warn("Notifications listener error:", error.message);
+    }
+  );
 }
 
 export function subscribeUserNotifications(

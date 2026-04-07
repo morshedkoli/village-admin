@@ -80,3 +80,13 @@ body {
 .stagger-4 { animation-delay: 0.2s; }
 .stagger-5 { animation-delay: 0.25s; }
 .stagger-6 { animation-delay: 0.3s; }
+
+@keyframes float {
+  0% { transform: translateY(0px) scale(1); }
+  50% { transform: translateY(-20px) scale(1.02); }
+  100% { transform: translateY(0px) scale(1); }
+}
+
+.animate-float {
+  animation: float 6s ease-in-out infinite;
+}

@@ -184,3 +184,89 @@ export async function DELETE(req: NextRequest) {
 
   return NextResponse.json({ ok: true });
 }
+
+export async function PATCH(req: NextRequest) {
+  const verified = await verifyAdmin(req);
+  if (!verified.ok) {
+    return NextResponse.json(
+      { error: verified.error },
+      { status: verified.status }
+    );
+  }
+
+  const body = (await req.json().catch(() => ({}))) as {
+    id?: string;
+    action?: "approve" | "reject";
+  };
+
+  const { id, action } = body;
+
+  if (!id || !action) {
+    return NextResponse.json(
+      { error: "Donation id and action are required" },
+      { status: 400 }
+    );
+  }
+
+  const adminDb = getAdminDb();
+  const donationRef = adminDb.collection("donations").doc(id);
+
+  try {
+    if (action === "approve") {
+      await adminDb.runTransaction(async (tx) => {
+        const donationSnap = await tx.get(donationRef);
+        if (!donationSnap.exists) {
+          throw new Error("Donation not found");
+        }
+
+        const data = donationSnap.data();
+        if (data?.status === "Approved") {
+          return;
+        }
+
+        const amount = Number(data?.amount ?? 0);
+        const donorName = String(data?.donorName ?? "Anonymous");
+        const villageRef = adminDb.collection("villages").doc("main_village");
+
+        tx.update(donationRef, {
+          status: "Approved",
+          approvedBy: verified.email,
+          approvedAt: FieldValue.serverTimestamp(),
+        });
+
+        tx.set(
+          villageRef,
+          { totalFundCollected: FieldValue.increment(amount) },
+          { merge: true }
+        );
+
+        tx.set(adminDb.collection("fund_transactions").doc(), {
+          type: "donation",
+          amount,
+          reference: donorName,
+          createdAt: FieldValue.serverTimestamp(),
+          addedBy: verified.email,
+        });
+
+        tx.set(adminDb.collection("notifications").doc(), {
+          title: "নতুন অনুদান",
+          body: `${donorName} ৳${amount} অনুদান দিয়েছেন`,
+          type: "donation",
+          source: "admin",
+          createdAt: FieldValue.serverTimestamp(),
+        });
+      });
+    } else {
+      await donationRef.update({
+        status: "Rejected",
+        rejectedBy: verified.email,
+        rejectedAt: FieldValue.serverTimestamp(),
+      });
+    }
+
+    return NextResponse.json({ ok: true });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Action failed";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}

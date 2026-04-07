@@ -23,7 +23,7 @@ import {
 } from "lucide-react";
 
 const navItems = [
-  { name: "Dashboard", href: "/", icon: LayoutDashboard },
+  { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { name: "Village Fund", href: "/fund", icon: Wallet },
   { name: "Projects", href: "/projects", icon: FolderKanban },
   { name: "Problems", href: "/problems", icon: AlertTriangle },
@@ -75,10 +75,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
         {/* Navigation */}
         <nav className="flex-1 py-4 px-3 space-y-1 overflow-y-auto">
           {navItems.map((item) => {
-            const isActive =
-              item.href === "/"
-                ? pathname === "/"
-                : pathname.startsWith(item.href);
+            const isActive = pathname.startsWith(item.href);
             const Icon = item.icon;
             return (
               <Link

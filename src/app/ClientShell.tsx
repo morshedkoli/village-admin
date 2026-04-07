@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { usePathname } from "next/navigation";
 import { AuthProvider } from "@/lib/AuthContext";
 import { AdminGate } from "@/lib/AdminGate";
 import Sidebar from "./Sidebar";
@@ -12,6 +13,11 @@ export default function ClientShell({
   children: React.ReactNode;
 }) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const pathname = usePathname();
+
+  if (pathname === "/") {
+    return <AuthProvider>{children}</AuthProvider>;
+  }
 
   return (
     <AuthProvider>
