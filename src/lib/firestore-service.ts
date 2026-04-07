@@ -40,16 +40,16 @@ export function subscribeVillageOverview(
   return onSnapshot(
     doc(db, "villages", VILLAGE_DOC_ID), 
     (snap) => {
-    const d = snap.data() ?? {};
-    callback({
-      name: (d.name as string) ?? "Our Village",
-      totalCitizens: toNumber(d.totalCitizens),
-      totalFundCollected: toNumber(d.totalFundCollected),
-      totalSpent: toNumber(d.totalSpent),
+      const d = snap.data() ?? {};
+      callback({
+        name: (d.name as string) ?? "Our Village",
+        totalCitizens: toNumber(d.totalCitizens),
+        totalFundCollected: toNumber(d.totalFundCollected),
+        totalSpent: toNumber(d.totalSpent),
+      });
     },
     (error) => { console.warn("Village listener error:", error.message); }
   );
-  });
 }
 
 export async function updateVillageOverview(
