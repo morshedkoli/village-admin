@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
   }
 
   const body = (await req.json().catch(() => ({}))) as {
-    donorName?: string;
+    userId?: string;
     amount?: number;
     paymentTarget?: string;
     senderNumber?: string;
@@ -54,16 +54,16 @@ export async function POST(req: NextRequest) {
     status?: "Pending" | "Approved";
   };
 
-  const donorName = String(body.donorName ?? "").trim();
+  const userId = String(body.userId ?? "").trim();
   const paymentTarget = String(body.paymentTarget ?? "").trim();
   const senderNumber = String(body.senderNumber ?? "").trim();
   const transactionId = String(body.transactionId ?? "").trim();
   const status = body.status === "Pending" ? "Pending" : "Approved";
   const amount = Math.round(Number(body.amount ?? 0));
 
-  if (!donorName) {
+  if (!userId) {
     return NextResponse.json(
-      { error: "Donor name is required" },
+      { error: "Please select a user for this donation" },
       { status: 400 }
     );
   }
@@ -83,6 +83,22 @@ export async function POST(req: NextRequest) {
   }
 
   const adminDb = getAdminDb();
+  const donorSnap = await adminDb.collection("users").doc(userId).get();
+  if (!donorSnap.exists) {
+    return NextResponse.json(
+      { error: "Selected user does not exist" },
+      { status: 400 }
+    );
+  }
+
+  const donorName = String(donorSnap.data()?.name ?? "").trim();
+  if (!donorName) {
+    return NextResponse.json(
+      { error: "Selected user is missing a name" },
+      { status: 400 }
+    );
+  }
+
   const donationRef = adminDb.collection("donations").doc();
   const villageRef = adminDb.collection("villages").doc("main_village");
   const villageSnap = await adminDb.collection("villages").doc("main_village").get();
@@ -126,7 +142,7 @@ export async function POST(req: NextRequest) {
       receivedAccountLabel,
       senderNumber,
       transactionId,
-      userId: "",
+      userId,
       status,
       createdAt: FieldValue.serverTimestamp(),
       addedBy: verified.email,

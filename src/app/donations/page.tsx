@@ -1,9 +1,8 @@
 "use client";
 
 import React, { useState, useMemo } from "react";
-import { useDonations, usePaymentAccounts } from "@/lib/hooks";
+import { useDonations, usePaymentAccounts, useUsers } from "@/lib/hooks";
 import { useAuth } from "@/lib/AuthContext";
-import { approveDonation, rejectDonation } from "@/lib/firestore-service";
 import { LoadingSkeleton } from "@/components/LoadingSkeleton";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { EmptyState } from "@/components/EmptyState";
@@ -50,6 +49,7 @@ export default function DonationsPage() {
   const { user } = useAuth();
   const { data: donations, loading } = useDonations();
   const { data: paymentAccounts } = usePaymentAccounts();
+  const { data: users, loading: usersLoading } = useUsers();
   const [approveId, setApproveId] = useState<string | null>(null);
   const [rejectId, setRejectId] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
@@ -63,7 +63,7 @@ export default function DonationsPage() {
   const [createError, setCreateError] = useState("");
   const [actionError, setActionError] = useState("");
   const [form, setForm] = useState({
-    donorName: "",
+    userId: "",
     amount: "",
     paymentTarget: "cash",
     senderNumber: "",
@@ -86,6 +86,15 @@ export default function DonationsPage() {
       })),
     ],
     [paymentAccounts]
+  );
+
+  const userOptions = useMemo(
+    () =>
+      users.map((u) => ({
+        value: u.id,
+        label: [u.name, u.phone].filter(Boolean).join(" • "),
+      })),
+    [users]
   );
 
   const filtered = useMemo(() => {
@@ -300,7 +309,7 @@ export default function DonationsPage() {
 
   const resetCreateForm = () => {
     setForm({
-      donorName: "",
+      userId: "",
       amount: "",
       paymentTarget: "cash",
       senderNumber: "",
@@ -314,8 +323,8 @@ export default function DonationsPage() {
     e.preventDefault();
 
     const amount = Number(form.amount);
-    if (!form.donorName.trim()) {
-      setCreateError("Donor name is required.");
+    if (!form.userId) {
+      setCreateError("Please select a citizen.");
       return;
     }
     if (!Number.isFinite(amount) || amount <= 0) {
@@ -335,7 +344,7 @@ export default function DonationsPage() {
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify({
-          donorName: form.donorName,
+          userId: form.userId,
           amount,
           paymentTarget: form.paymentTarget,
           senderNumber: form.senderNumber,
@@ -884,17 +893,29 @@ export default function DonationsPage() {
         <form onSubmit={handleCreateDonation} className="space-y-5">
           <div>
             <label className="block text-sm font-medium text-text-primary mb-1.5">
-              Donor Name
+              Citizen
             </label>
-            <input
-              type="text"
-              value={form.donorName}
+            <select
+              value={form.userId}
               onChange={(e) =>
-                setForm((prev) => ({ ...prev, donorName: e.target.value }))
+                setForm((prev) => ({ ...prev, userId: e.target.value }))
               }
-              placeholder="e.g. Abdul Karim"
+              disabled={usersLoading || users.length === 0}
               className="w-full px-4 py-2.5 rounded-xl border border-border bg-background text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
-            />
+            >
+              <option value="">
+                {usersLoading
+                  ? "Loading citizens..."
+                  : users.length === 0
+                    ? "No citizens available"
+                    : "Select a citizen"}
+              </option>
+              {userOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
