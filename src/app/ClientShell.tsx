@@ -27,12 +27,12 @@ export default function ClientShell({
             collapsed={sidebarCollapsed}
             onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
           />
-          <div className="flex-1 flex flex-col min-h-screen">
+          <div className="flex-1 flex flex-col min-h-screen min-w-0">
             <TopNav
               onMenuToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
             />
-            <main className="flex-1 p-6 overflow-auto">
-              <div className="max-w-[1400px] mx-auto">{children}</div>
+            <main className="flex-1 px-6 py-8 overflow-auto">
+              <div className="max-w-[1280px] mx-auto">{children}</div>
             </main>
           </div>
         </div>

@@ -1,40 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { FieldValue } from "firebase-admin/firestore";
-import { getAdminAuth, getAdminDb } from "@/lib/firebase-admin";
-import { isBootstrapAdminEmail, normalizeAdminEmail } from "@/lib/admin-access";
-
-async function verifyAdmin(req: NextRequest) {
-  const authHeader = req.headers.get("authorization");
-  if (!authHeader?.startsWith("Bearer ")) {
-    return { ok: false as const, status: 401, error: "Missing bearer token" };
-  }
-
-  try {
-    const token = authHeader.slice(7);
-    const decoded = await getAdminAuth().verifyIdToken(token);
-    const email = normalizeAdminEmail(decoded.email ?? "");
-
-    if (decoded.admin === true || isBootstrapAdminEmail(email)) {
-      return { ok: true as const, email };
-    }
-
-    const adminSnap = await getAdminDb().collection("admins").doc(email).get();
-    if (adminSnap.exists) {
-      return { ok: true as const, email };
-    }
-
-    return {
-      ok: false as const,
-      status: 401,
-      error: "Signed-in user is not an admin",
-    };
-  } catch (error: unknown) {
-    const message =
-      error instanceof Error ? error.message : "Failed to verify admin token";
-    const status = message.includes("project_id") ? 500 : 401;
-    return { ok: false as const, status, error: message };
-  }
-}
+import { getAdminDb } from "@/lib/firebase-admin";
+import { verifyAdmin } from "@/lib/verify-admin";
 
 export async function POST(req: NextRequest) {
   const verified = await verifyAdmin(req);

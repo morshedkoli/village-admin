@@ -1,34 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getAdminAuth, getAdminDb, getAdminMessaging } from "@/lib/firebase-admin";
-import { isBootstrapAdminEmail, normalizeAdminEmail } from "@/lib/admin-access";
+import { getAdminMessaging } from "@/lib/firebase-admin";
+import { verifyAdmin } from "@/lib/verify-admin";
 
-const VALID_TYPES = ["donation", "problem", "citizen", "project"];
-
-async function verifyAdmin(req: NextRequest): Promise<boolean> {
-  const authHeader = req.headers.get("authorization");
-  if (!authHeader?.startsWith("Bearer ")) return false;
-
-  try {
-    const token = authHeader.slice(7);
-    const decoded = await getAdminAuth().verifyIdToken(token);
-    const email = normalizeAdminEmail(decoded.email ?? "");
-
-    if (decoded.admin === true || isBootstrapAdminEmail(email)) {
-      return true;
-    }
-
-    if (!email) return false;
-    const adminSnap = await getAdminDb().collection("admins").doc(email).get();
-    return adminSnap.exists;
-  } catch {
-    return false;
-  }
-}
+const VALID_TYPES = ["donation", "problem", "citizen", "project", "general", "registration"];
 
 export async function POST(req: NextRequest) {
   // Verify the caller is an authenticated admin
-  if (!(await verifyAdmin(req))) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const verified = await verifyAdmin(req);
+  if (!verified.ok) {
+    return NextResponse.json({ error: verified.error }, { status: verified.status });
   }
 
   const { title, body, type } = await req.json();
@@ -46,7 +26,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const result = await getAdminMessaging().send({
-      topic: "all",
+      topic: "village_broadcast",
       notification: {
         title,
         body,

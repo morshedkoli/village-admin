@@ -68,7 +68,7 @@ export interface AppNotification {
   id: string;
   title: string;
   body: string;
-  type: "donation" | "problem" | "citizen" | "project";
+  type: "donation" | "problem" | "citizen" | "project" | "general" | "registration";
   source: "user" | "admin";
   createdAt: Date;
 }

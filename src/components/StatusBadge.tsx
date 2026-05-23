@@ -8,7 +8,7 @@ const variants: Record<string, string> = {
   Planning: "bg-secondary-light text-secondary",
   "In Progress": "bg-warning-light text-warning",
   Active: "bg-success-light text-success",
-  Inactive: "bg-background text-text-muted",
+  Inactive: "bg-surface-hover text-text-muted",
   donation: "bg-success-light text-success",
   problem: "bg-danger-light text-danger",
   citizen: "bg-info-light text-info",
@@ -23,11 +23,11 @@ export function StatusBadge({
   status: string;
   className?: string;
 }) {
-  const color = variants[status] ?? "bg-background text-text-secondary";
+  const color = variants[status] ?? "bg-surface-hover text-text-secondary";
   return (
     <span
       className={cn(
-        "inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold",
+        "inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold tracking-wide",
         color,
         className
       )}

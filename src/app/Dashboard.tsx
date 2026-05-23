@@ -38,7 +38,16 @@ import {
   Cell,
 } from "recharts";
 
-const PIE_COLORS = ["#F39C12", "#4A90E2", "#2ECC71"];
+// Project status palette — muted, accessible.
+const PIE_COLORS = ["#94a3b8", "#3b82f6", "#16a34a"];
+
+const tooltipStyle = {
+  borderRadius: "8px",
+  border: "1px solid #e4e4e7",
+  boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.05)",
+  fontSize: "12px",
+  padding: "8px 12px",
+};
 
 export default function Dashboard() {
   const { data: overview, loading: l1 } = useVillageOverview();
@@ -73,7 +82,11 @@ export default function Dashboard() {
   }, [donations]);
 
   const projectStatusData = useMemo(() => {
-    const counts: Record<string, number> = { Planning: 0, "In Progress": 0, Completed: 0 };
+    const counts: Record<string, number> = {
+      Planning: 0,
+      "In Progress": 0,
+      Completed: 0,
+    };
     for (const p of projects) counts[p.status] = (counts[p.status] ?? 0) + 1;
     return Object.entries(counts)
       .filter(([, v]) => v > 0)
@@ -82,25 +95,32 @@ export default function Dashboard() {
 
   if (l1 || l2 || l3 || l4 || l5 || l6) return <LoadingSkeleton />;
 
-  const activeProjects = projects.filter((p) => p.status !== "Completed").length;
+  const activeProjects = projects.filter(
+    (p) => p.status !== "Completed"
+  ).length;
   const pendingProblems = problems.filter((p) => p.status === "Pending").length;
   const recentDonations = donations
     .filter((d) => d.status === "Approved")
     .slice(0, 6);
-  const pendingDonationCount = donations.filter((d) => d.status === "Pending").length;
+  const pendingDonationCount = donations.filter(
+    (d) => d.status === "Pending"
+  ).length;
   const recentNotifications = notifications.slice(0, 5);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
+      {/* Page header */}
       <div>
-        <h1 className="text-2xl font-bold text-text-primary">Dashboard</h1>
+        <h1 className="text-[26px] font-semibold text-text-primary tracking-tight">
+          Dashboard
+        </h1>
         <p className="text-sm text-text-secondary mt-1">
           Overview of your village operations
         </p>
       </div>
 
-      {/* Stat Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+      {/* Stat cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
         <DashboardCard
           title="Total Fund"
           value={formatBDT(overview?.totalFundCollected ?? 0)}
@@ -152,32 +172,43 @@ export default function Dashboard() {
       </div>
 
       {/* Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <ChartCard
           title="Monthly Donations"
-          description="Donation trend over recent months"
+          description="Approved donation trend over recent months"
           className="animate-fade-in"
         >
           {monthlyDonations.length === 0 ? (
-            <div className="h-[250px] flex items-center justify-center text-sm text-text-muted">
+            <div className="h-[240px] flex items-center justify-center text-sm text-text-muted">
               No donation data yet
             </div>
           ) : (
-            <ResponsiveContainer width="100%" height={250}>
-              <BarChart data={monthlyDonations}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                <XAxis dataKey="month" fontSize={12} tick={{ fill: "#9CA3AF" }} axisLine={false} tickLine={false} />
-                <YAxis fontSize={12} tick={{ fill: "#9CA3AF" }} axisLine={false} tickLine={false} />
+            <ResponsiveContainer width="100%" height={240}>
+              <BarChart data={monthlyDonations} barCategoryGap={20}>
+                <CartesianGrid
+                  strokeDasharray="2 4"
+                  stroke="#f4f4f5"
+                  vertical={false}
+                />
+                <XAxis
+                  dataKey="month"
+                  fontSize={11}
+                  tick={{ fill: "#a1a1aa" }}
+                  axisLine={false}
+                  tickLine={false}
+                />
+                <YAxis
+                  fontSize={11}
+                  tick={{ fill: "#a1a1aa" }}
+                  axisLine={false}
+                  tickLine={false}
+                />
                 <Tooltip
                   formatter={(value) => [formatBDT(Number(value)), "Amount"]}
-                  contentStyle={{
-                    borderRadius: "12px",
-                    border: "1px solid #E5E7EB",
-                    boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.05)",
-                    fontSize: "13px",
-                  }}
+                  cursor={{ fill: "#f4f4f5" }}
+                  contentStyle={tooltipStyle}
                 />
-                <Bar dataKey="amount" fill="#1F7A5A" radius={[6, 6, 0, 0]} />
+                <Bar dataKey="amount" fill="#15803d" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           )}
@@ -185,16 +216,16 @@ export default function Dashboard() {
 
         <ChartCard
           title="Project Status"
-          description="Distribution of project statuses"
+          description="Distribution by stage"
           className="animate-fade-in"
         >
           {projectStatusData.length === 0 ? (
-            <div className="h-[250px] flex items-center justify-center text-sm text-text-muted">
+            <div className="h-[240px] flex items-center justify-center text-sm text-text-muted">
               No project data yet
             </div>
           ) : (
             <div className="flex items-center gap-6">
-              <ResponsiveContainer width="60%" height={250}>
+              <ResponsiveContainer width="55%" height={240}>
                 <PieChart>
                   <Pie
                     data={projectStatusData}
@@ -204,30 +235,31 @@ export default function Dashboard() {
                     cy="50%"
                     innerRadius={55}
                     outerRadius={85}
+                    paddingAngle={2}
                     strokeWidth={0}
                   >
                     {projectStatusData.map((_, i) => (
                       <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
                     ))}
                   </Pie>
-                  <Tooltip
-                    contentStyle={{
-                      borderRadius: "12px",
-                      border: "1px solid #E5E7EB",
-                      fontSize: "13px",
-                    }}
-                  />
+                  <Tooltip contentStyle={tooltipStyle} />
                 </PieChart>
               </ResponsiveContainer>
-              <div className="flex-1 space-y-3">
+              <div className="flex-1 space-y-2.5">
                 {projectStatusData.map((item, i) => (
                   <div key={item.name} className="flex items-center gap-3">
                     <div
-                      className="w-3 h-3 rounded-full shrink-0"
-                      style={{ backgroundColor: PIE_COLORS[i % PIE_COLORS.length] }}
+                      className="w-2 h-2 rounded-full shrink-0"
+                      style={{
+                        backgroundColor: PIE_COLORS[i % PIE_COLORS.length],
+                      }}
                     />
-                    <span className="text-sm text-text-secondary flex-1">{item.name}</span>
-                    <span className="text-sm font-semibold text-text-primary">{item.value}</span>
+                    <span className="text-[13px] text-text-secondary flex-1">
+                      {item.name}
+                    </span>
+                    <span className="text-sm font-semibold text-text-primary tabular-nums">
+                      {item.value}
+                    </span>
                   </div>
                 ))}
               </div>
@@ -236,14 +268,14 @@ export default function Dashboard() {
         </ChartCard>
       </div>
 
-      {/* Recent Activity */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-white rounded-2xl border border-border p-6 animate-fade-in">
+      {/* Recent activity */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="bg-white rounded-xl border border-border p-6 animate-fade-in">
           <div className="flex items-center justify-between mb-5">
-            <h3 className="text-base font-semibold text-text-primary">
+            <h3 className="text-[15px] font-semibold text-text-primary tracking-tight">
               Recent Donations
               {pendingDonationCount > 0 && (
-                <span className="ml-2 inline-flex items-center justify-center px-2 py-0.5 rounded-full text-xs font-bold bg-warning-light text-warning">
+                <span className="ml-2 inline-flex items-center justify-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-warning-light text-warning">
                   {pendingDonationCount} pending
                 </span>
               )}
@@ -256,21 +288,25 @@ export default function Dashboard() {
             </a>
           </div>
           {recentDonations.length === 0 ? (
-            <p className="text-sm text-text-muted py-8 text-center">No donations yet</p>
+            <p className="text-sm text-text-muted py-8 text-center">
+              No donations yet
+            </p>
           ) : (
-            <div className="space-y-3">
+            <div className="divide-y divide-border-light">
               {recentDonations.map((d) => (
                 <div
                   key={d.id}
-                  className="flex items-center justify-between py-2 border-b border-border-light last:border-none"
+                  className="flex items-center justify-between py-2.5 first:pt-0 last:pb-0"
                 >
-                  <div>
-                    <p className="text-sm font-medium text-text-primary">{d.donorName}</p>
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-text-primary truncate">
+                      {d.donorName}
+                    </p>
                     <p className="text-xs text-text-muted">
                       {d.paymentMethod} &middot; {relativeTime(d.createdAt)}
                     </p>
                   </div>
-                  <span className="text-sm font-semibold text-success">
+                  <span className="text-sm font-semibold text-success tabular-nums shrink-0 ml-3">
                     +{formatBDT(d.amount)}
                   </span>
                 </div>
@@ -279,9 +315,11 @@ export default function Dashboard() {
           )}
         </div>
 
-        <div className="bg-white rounded-2xl border border-border p-6 animate-fade-in">
+        <div className="bg-white rounded-xl border border-border p-6 animate-fade-in">
           <div className="flex items-center justify-between mb-5">
-            <h3 className="text-base font-semibold text-text-primary">Recent Activity</h3>
+            <h3 className="text-[15px] font-semibold text-text-primary tracking-tight">
+              Recent Activity
+            </h3>
             <a
               href="/notifications"
               className="text-xs font-medium text-primary hover:text-primary-dark transition-colors flex items-center gap-1"
@@ -290,20 +328,24 @@ export default function Dashboard() {
             </a>
           </div>
           {recentNotifications.length === 0 ? (
-            <p className="text-sm text-text-muted py-8 text-center">No recent activity</p>
+            <p className="text-sm text-text-muted py-8 text-center">
+              No recent activity
+            </p>
           ) : (
-            <div className="space-y-3">
+            <div className="divide-y divide-border-light">
               {recentNotifications.map((n) => (
                 <div
                   key={n.id}
-                  className="flex items-start gap-3 py-2 border-b border-border-light last:border-none"
+                  className="flex items-start gap-3 py-2.5 first:pt-0 last:pb-0"
                 >
                   <StatusBadge status={n.type} />
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium text-text-primary">{n.title}</p>
+                    <p className="text-sm font-medium text-text-primary truncate">
+                      {n.title}
+                    </p>
                     <p className="text-xs text-text-muted truncate">{n.body}</p>
                   </div>
-                  <span className="text-xs text-text-muted whitespace-nowrap">
+                  <span className="text-[11px] text-text-muted whitespace-nowrap shrink-0">
                     {relativeTime(n.createdAt)}
                   </span>
                 </div>

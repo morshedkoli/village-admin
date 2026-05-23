@@ -9,14 +9,29 @@ interface ChartCardProps {
   action?: ReactNode;
 }
 
-export function ChartCard({ title, description, children, className, action }: ChartCardProps) {
+export function ChartCard({
+  title,
+  description,
+  children,
+  className,
+  action,
+}: ChartCardProps) {
   return (
-    <div className={cn("bg-white rounded-2xl border border-border p-6", className)}>
-      <div className="flex items-start justify-between mb-6">
+    <div
+      className={cn(
+        "bg-white rounded-xl border border-border p-6",
+        className
+      )}
+    >
+      <div className="flex items-start justify-between mb-5">
         <div>
-          <h3 className="text-base font-semibold text-text-primary">{title}</h3>
+          <h3 className="text-[15px] font-semibold text-text-primary tracking-tight">
+            {title}
+          </h3>
           {description && (
-            <p className="text-sm text-text-secondary mt-0.5">{description}</p>
+            <p className="text-[13px] text-text-secondary mt-0.5">
+              {description}
+            </p>
           )}
         </div>
         {action}

@@ -49,6 +49,20 @@ const typeConfig: Record<
     route: "/projects",
     label: "Projects",
   },
+  general: {
+    icon: Bell,
+    color: "text-text-secondary",
+    bg: "bg-background",
+    route: "/notifications",
+    label: "General",
+  },
+  registration: {
+    icon: Users,
+    color: "text-info",
+    bg: "bg-info-light",
+    route: "/users",
+    label: "Registration",
+  },
 };
 
 const READ_KEY = "notif_read_ids";
@@ -130,10 +144,10 @@ export default function TopNav({ onMenuToggle }: { onMenuToggle: () => void }) {
   };
 
   return (
-    <header className="sticky top-0 z-20 bg-white/80 backdrop-blur-md border-b border-border h-16 flex items-center px-6 gap-4">
+    <header className="sticky top-0 z-20 bg-white/90 backdrop-blur-md border-b border-border h-14 flex items-center px-6 gap-4">
       <button
         onClick={onMenuToggle}
-        className="lg:hidden p-2 rounded-xl hover:bg-surface-hover transition-colors"
+        className="lg:hidden p-2 rounded-md hover:bg-surface-hover transition-colors"
       >
         <Menu className="w-5 h-5 text-text-secondary" />
       </button>
@@ -144,14 +158,14 @@ export default function TopNav({ onMenuToggle }: { onMenuToggle: () => void }) {
           <input
             type="text"
             placeholder="Search..."
-            className="w-full pl-10 pr-4 py-2 bg-background rounded-xl border border-border text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+            className="w-full pl-10 pr-4 py-2 bg-surface rounded-lg border border-border text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/15 focus:border-primary transition-all"
           />
         </div>
       </div>
 
       <div className="flex items-center gap-3">
         {overview && (
-          <span className="hidden md:block text-xs font-medium text-text-secondary bg-primary-light text-primary px-3 py-1.5 rounded-lg">
+          <span className="hidden md:inline-flex items-center text-xs font-medium text-text-secondary bg-surface-hover px-2.5 py-1 rounded-md border border-border">
             {overview.name}
           </span>
         )}
@@ -161,11 +175,11 @@ export default function TopNav({ onMenuToggle }: { onMenuToggle: () => void }) {
           <button
             ref={buttonRef}
             onClick={() => setOpen(!open)}
-            className="relative p-2 rounded-xl hover:bg-surface-hover transition-colors"
+            className="relative p-2 rounded-md hover:bg-surface-hover transition-colors"
           >
             <Bell className="w-5 h-5 text-text-secondary" />
             {unreadCount > 0 && (
-              <span className="absolute -top-0.5 -right-0.5 w-4.5 h-4.5 bg-danger text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+              <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 bg-danger text-white text-[10px] font-bold rounded-full flex items-center justify-center ring-2 ring-white">
                 {unreadCount > 9 ? "9+" : unreadCount}
               </span>
             )}
@@ -175,14 +189,14 @@ export default function TopNav({ onMenuToggle }: { onMenuToggle: () => void }) {
           {open && (
             <div
               ref={panelRef}
-              className="absolute right-0 top-full mt-2 w-[380px] max-h-[480px] bg-white rounded-2xl border border-border shadow-2xl flex flex-col animate-scale-in z-50"
+              className="absolute right-0 top-full mt-2 w-[380px] max-h-[480px] bg-white rounded-xl border border-border shadow-lg flex flex-col animate-scale-in z-50"
             >
               {/* Header */}
               <div className="px-5 py-3.5 border-b border-border flex items-center justify-between shrink-0">
                 <h3 className="text-sm font-semibold text-text-primary">
                   Notifications
                   {unreadCount > 0 && (
-                    <span className="ml-2 inline-flex items-center justify-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-danger-light text-danger">
+                    <span className="ml-2 inline-flex items-center justify-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-danger-light text-danger">
                       {unreadCount}
                     </span>
                   )}
@@ -217,7 +231,7 @@ export default function TopNav({ onMenuToggle }: { onMenuToggle: () => void }) {
                           className="w-full flex items-start gap-3 px-5 py-3.5 hover:bg-surface-hover/60 transition-colors text-left group"
                         >
                           <div
-                            className={`w-9 h-9 rounded-xl ${cfg.bg} flex items-center justify-center shrink-0 mt-0.5`}
+                            className={`w-8 h-8 rounded-md ${cfg.bg} flex items-center justify-center shrink-0 mt-0.5`}
                           >
                             <Icon className={`w-4 h-4 ${cfg.color}`} />
                           </div>
@@ -280,11 +294,11 @@ export default function TopNav({ onMenuToggle }: { onMenuToggle: () => void }) {
               <img
                 src={user.photoURL}
                 alt=""
-                className="w-8 h-8 rounded-full ring-2 ring-primary/10"
+                className="w-7 h-7 rounded-full"
                 referrerPolicy="no-referrer"
               />
             ) : (
-              <div className="w-8 h-8 rounded-full bg-primary text-white flex items-center justify-center text-sm font-semibold">
+              <div className="w-7 h-7 rounded-full bg-primary text-white flex items-center justify-center text-xs font-semibold">
                 {user.displayName?.charAt(0) || "A"}
               </div>
             )}
@@ -292,7 +306,7 @@ export default function TopNav({ onMenuToggle }: { onMenuToggle: () => void }) {
               <p className="text-sm font-medium text-text-primary leading-tight">
                 {user.displayName}
               </p>
-              <p className="text-xs text-text-muted leading-tight">Admin</p>
+              <p className="text-[11px] text-text-muted leading-tight">Admin</p>
             </div>
           </div>
         )}
