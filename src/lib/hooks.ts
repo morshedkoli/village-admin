@@ -103,11 +103,16 @@ export function useNotifications() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let active = true;
     const unsub = subscribeNotifications((notifications) => {
+      if (!active) return;
       setData(notifications);
       setLoading(false);
     });
-    return unsub;
+    return () => {
+      active = false;
+      unsub();
+    };
   }, []);
 
   return { data, loading };
@@ -118,11 +123,16 @@ export function useUserNotifications() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let active = true;
     const unsub = subscribeUserNotifications((notifications) => {
+      if (!active) return;
       setData(notifications);
       setLoading(false);
     });
-    return unsub;
+    return () => {
+      active = false;
+      unsub();
+    };
   }, []);
 
   return { data, loading };

@@ -92,7 +92,9 @@ export default function TopNav({ onMenuToggle }: { onMenuToggle: () => void }) {
   const buttonRef = useRef<HTMLButtonElement>(null);
 
   // Only show unread notifications in the dropdown
-  const unread = notifications.filter((n) => !readIds.has(n.id));
+  const unread = notifications.filter(
+    (n, i, arr) => !readIds.has(n.id) && arr.findIndex((x) => x.id === n.id) === i
+  );
   const unreadCount = unread.length;
 
   // Clean up stale IDs that no longer exist

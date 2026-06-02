@@ -105,69 +105,116 @@ export default function ReportsPage() {
   const { data: donations, loading: l2 } = useDonations();
   const { data: projects, loading: l3 } = useProjects();
 
+  const [fromDate, setFromDate] = React.useState("");
+  const [toDate, setToDate] = React.useState("");
+
+  const availableMonths = React.useMemo(() => {
+    const months = new Set<string>();
+    for (const d of donations) {
+      if (d.createdAt) {
+        months.add(`${d.createdAt.getFullYear()}-${String(d.createdAt.getMonth() + 1).padStart(2, "0")}`);
+      }
+    }
+    for (const p of projects) {
+      if (p.createdAt) {
+        months.add(`${p.createdAt.getFullYear()}-${String(p.createdAt.getMonth() + 1).padStart(2, "0")}`);
+      }
+    }
+    return Array.from(months).sort().reverse();
+  }, [donations, projects]);
+
   if (l1 || l2 || l3) return <LoadingSkeleton />;
 
-  const totalDonations = donations.reduce((s, d) => s + d.amount, 0);
-  const totalProjectCost = projects.reduce((s, p) => s + p.estimatedCost, 0);
-  const totalAllocated = projects.reduce((s, p) => s + p.allocatedFunds, 0);
+  const filterByDate = <T extends { createdAt?: Date }>(
+    items: T[]
+  ): T[] => {
+    if (!fromDate && !toDate) return items;
+    return items.filter((item) => {
+      if (!item.createdAt) return true;
+      const d = item.createdAt.getTime();
+      if (fromDate && d < new Date(fromDate).getTime()) return false;
+      if (toDate) {
+        const end = new Date(toDate);
+        end.setHours(23, 59, 59, 999);
+        if (d > end.getTime()) return false;
+      }
+      return true;
+    });
+  };
+
+  const filteredDonations = filterByDate(donations);
+  const filteredProjects = filterByDate(projects);
+
+  const totalDonations = filteredDonations.reduce((s, d) => s + d.amount, 0);
+  const totalProjectCost = filteredProjects.reduce((s, p) => s + p.estimatedCost, 0);
+  const totalAllocated = filteredProjects.reduce((s, p) => s + p.allocatedFunds, 0);
+
+  const dateSuffix = (): string => {
+    if (fromDate && toDate) return `-${fromDate}-to-${toDate}`;
+    if (fromDate) return `-from-${fromDate}`;
+    if (toDate) return `-to-${toDate}`;
+    return "";
+  };
 
   const downloadCSV = () => {
     const headers = ["Donor Name", "Amount", "Payment Method", "Date"];
-    const rows = donations.map((d) => [
+    const rows = filteredDonations.map((d) => [
       d.donorName,
       d.amount.toString(),
       d.paymentMethod,
       d.createdAt.toLocaleDateString(),
     ]);
     const csv = [headers, ...rows].map((r) => r.join(",")).join("\n");
-    downloadBlob(new Blob([csv], { type: "text/csv" }), "village-donations-report.csv");
+    downloadBlob(new Blob([csv], { type: "text/csv" }), `village-donations-report${dateSuffix()}.csv`);
   };
 
   const downloadProjectCSV = () => {
     const headers = ["Project", "Status", "Estimated Cost", "Allocated Funds"];
-    const rows = projects.map((p) => [
+    const rows = filteredProjects.map((p) => [
       p.title,
       p.status,
       p.estimatedCost.toString(),
       p.allocatedFunds.toString(),
     ]);
     const csv = [headers, ...rows].map((r) => r.join(",")).join("\n");
-    downloadBlob(new Blob([csv], { type: "text/csv" }), "village-projects-report.csv");
+    downloadBlob(new Blob([csv], { type: "text/csv" }), `village-projects-report${dateSuffix()}.csv`);
   };
 
   const downloadDonationPDF = () => {
     const lines = [
       "Village Donation Report",
       "",
-      `Total Donations: ${donations.length}`,
+      `Period: ${fromDate || "All time"} — ${toDate || "All time"}`,
+      `Total Donations: ${filteredDonations.length}`,
       `Total Amount: ${formatBDT(totalDonations)}`,
       "",
       "Donations",
-      ...donations.map(
+      ...filteredDonations.map(
         (d, index) =>
           `${index + 1}. ${d.donorName} | ${formatBDT(d.amount)} | ${d.paymentMethod} | ${d.createdAt.toLocaleDateString()}`
       ),
     ];
 
-    downloadBlob(buildPdf(lines), "village-donations-report.pdf");
+    downloadBlob(buildPdf(lines), `village-donations-report${dateSuffix()}.pdf`);
   };
 
   const downloadProjectPDF = () => {
     const lines = [
       "Village Project Report",
       "",
-      `Total Projects: ${projects.length}`,
+      `Period: ${fromDate || "All time"} — ${toDate || "All time"}`,
+      `Total Projects: ${filteredProjects.length}`,
       `Total Estimated Cost: ${formatBDT(totalProjectCost)}`,
       `Total Allocated Funds: ${formatBDT(totalAllocated)}`,
       "",
       "Projects",
-      ...projects.map(
+      ...filteredProjects.map(
         (p, index) =>
           `${index + 1}. ${p.title} | ${p.status} | Estimated ${formatBDT(p.estimatedCost)} | Allocated ${formatBDT(p.allocatedFunds)}`
       ),
     ];
 
-    downloadBlob(buildPdf(lines), "village-projects-report.pdf");
+    downloadBlob(buildPdf(lines), `village-projects-report${dateSuffix()}.pdf`);
   };
 
   return (
@@ -235,6 +282,82 @@ export default function ReportsPage() {
         </div>
       </div>
 
+      {/* Date Filter */}
+      <div className="bg-white rounded-2xl border border-border p-6">
+        <h2 className="text-base font-semibold text-text-primary mb-4">
+          Filter by Date
+        </h2>
+        <div className="flex items-end gap-4 flex-wrap">
+          <div>
+            <label className="block text-xs text-text-muted mb-1.5">From</label>
+            <input
+              type="date"
+              value={fromDate}
+              onChange={(e) => setFromDate(e.target.value)}
+              className="px-3 py-2 rounded-xl border border-border bg-background text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-primary"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-text-muted mb-1.5">To</label>
+            <input
+              type="date"
+              value={toDate}
+              onChange={(e) => setToDate(e.target.value)}
+              className="px-3 py-2 rounded-xl border border-border bg-background text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-primary"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-text-muted mb-1.5">Month</label>
+            <select
+              value=""
+              onChange={(e) => {
+                const val = e.target.value;
+                if (!val) return;
+                const [y, m] = val.split("-");
+                const lastDay = new Date(Number(y), Number(m), 0).getDate();
+                setFromDate(`${val}-01`);
+                setToDate(`${val}-${String(lastDay).padStart(2, "0")}`);
+              }}
+              className="px-3 py-2 rounded-xl border border-border bg-background text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-primary"
+            >
+              <option value="">All months</option>
+              {availableMonths.map((ym) => {
+                const [y, m] = ym.split("-");
+                const label = new Date(Number(y), Number(m) - 1).toLocaleDateString("en-US", {
+                  year: "numeric",
+                  month: "long",
+                });
+                return (
+                  <option key={ym} value={ym}>
+                    {label}
+                  </option>
+                );
+              })}
+            </select>
+          </div>
+          <div className="flex gap-2 items-end">
+            <button
+              onClick={() => {
+                const now = new Date();
+                const y = now.getFullYear();
+                const m = String(now.getMonth() + 1).padStart(2, "0");
+                setFromDate(`${y}-${m}-01`);
+                setToDate(`${y}-${m}-${String(now.getDate()).padStart(2, "0")}`);
+              }}
+              className="px-3 py-2 rounded-xl text-xs font-medium bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
+            >
+              This Month
+            </button>
+            <button
+              onClick={() => { setFromDate(""); setToDate(""); }}
+              className="px-3 py-2 rounded-xl text-xs font-medium bg-background border border-border text-text-muted hover:text-text-primary transition-colors"
+            >
+              Clear
+            </button>
+          </div>
+        </div>
+      </div>
+
       {/* Download Reports */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="bg-white rounded-2xl border border-border p-6">
@@ -247,7 +370,7 @@ export default function ReportsPage() {
                 Donation Report
               </h3>
               <p className="text-xs text-text-muted">
-                {donations.length} donations &middot; {formatBDT(totalDonations)} total
+                {filteredDonations.length} of {donations.length} donations &middot; {formatBDT(totalDonations)} total
               </p>
             </div>
           </div>
@@ -283,7 +406,7 @@ export default function ReportsPage() {
                 Project Report
               </h3>
               <p className="text-xs text-text-muted">
-                {projects.length} projects &middot; {formatBDT(totalAllocated)} allocated
+                {filteredProjects.length} of {projects.length} projects &middot; {formatBDT(totalAllocated)} allocated
               </p>
             </div>
           </div>

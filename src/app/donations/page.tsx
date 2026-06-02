@@ -21,7 +21,6 @@ import {
   CheckCheck,
   Plus,
   HeartHandshake,
-  Trash2,
 } from "lucide-react";
 import {
   BarChart,
@@ -52,7 +51,6 @@ export default function DonationsPage() {
   const { data: users, loading: usersLoading } = useUsers();
   const [approveId, setApproveId] = useState<string | null>(null);
   const [rejectId, setRejectId] = useState<string | null>(null);
-  const [deleteId, setDeleteId] = useState<string | null>(null);
   const [filter, setFilter] = useState<FilterPeriod>("all");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [actionLoading, setActionLoading] = useState<string | null>(null);
@@ -252,33 +250,6 @@ export default function DonationsPage() {
 
     setSelectedIds(new Set());
     setBulkApproveOpen(false);
-  };
-
-  const handleDelete = async (id: string) => {
-    setActionLoading(id);
-    setActionError("");
-    try {
-      const token = await user?.getIdToken();
-      const res = await fetch(`/api/donations?id=${encodeURIComponent(id)}`, {
-        method: "DELETE",
-        headers: {
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-      });
-
-      const data = (await res.json().catch(() => ({}))) as { error?: string };
-      if (!res.ok) {
-        throw new Error(data.error || "Failed to delete donation");
-      }
-    } catch (err) {
-      setActionError(
-        err instanceof Error ? err.message : "Failed to delete donation"
-      );
-      console.error("Failed to delete donation:", err);
-    } finally {
-      setActionLoading(null);
-      setDeleteId(null);
-    }
   };
 
   const toggleSelect = (id: string) => {
@@ -622,15 +593,6 @@ export default function DonationsPage() {
                             <XCircle className="w-3.5 h-3.5" />
                             Reject
                           </button>
-                          <button
-                            onClick={() => setDeleteId(donation.id)}
-                            disabled={isLoading}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-danger-light text-danger hover:bg-danger hover:text-white text-xs font-semibold transition-colors disabled:opacity-50"
-                            title="Delete"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                            Delete
-                          </button>
                         </div>
                       </td>
                     </tr>
@@ -799,14 +761,6 @@ export default function DonationsPage() {
                               </button>
                             </>
                           )}
-                          <button
-                            onClick={() => setDeleteId(donation.id)}
-                            disabled={isLoading}
-                            className="p-2 rounded-lg hover:bg-danger-light text-text-muted hover:text-danger transition-colors disabled:opacity-50"
-                            title="Delete"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
                         </div>
                       </td>
                     </tr>
@@ -864,22 +818,6 @@ export default function DonationsPage() {
         loadingLabel="Approving..."
         onConfirm={handleBulkApprove}
         onCancel={() => setBulkApproveOpen(false)}
-      />
-      <ConfirmDialog
-        open={deleteId !== null}
-        title="Delete Donation"
-        message={`Are you sure you want to delete the donation of ${formatBDT(
-          donations.find((d) => d.id === deleteId)?.amount ?? 0
-        )} from "${
-          donations.find((d) => d.id === deleteId)?.donorName ?? ""
-        }"? This action cannot be undone.`}
-        variant="danger"
-        confirmLabel="Delete"
-        loadingLabel="Deleting..."
-        onConfirm={async () => {
-          if (deleteId) await handleDelete(deleteId);
-        }}
-        onCancel={() => setDeleteId(null)}
       />
       <FormModal
         open={showCreateModal}

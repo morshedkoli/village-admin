@@ -471,9 +471,14 @@ function mapNotification(id: string, d: DocumentData): AppNotification {
 function sortNotificationsByCreatedAt(
   notifications: AppNotification[]
 ): AppNotification[] {
-  return [...notifications].sort(
-    (a, b) => b.createdAt.getTime() - a.createdAt.getTime()
-  );
+  const seen = new Set<string>();
+  return [...notifications]
+    .filter((n) => {
+      if (seen.has(n.id)) return false;
+      seen.add(n.id);
+      return true;
+    })
+    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
 }
 
 export function subscribeNotifications(
@@ -502,17 +507,14 @@ export function subscribeNotifications(
 export function subscribeUserNotifications(
   callback: (notifications: AppNotification[]) => void
 ): Unsubscribe {
-  const indexedQuery = query(
+  const q = query(
     collection(db, "notifications"),
     where("source", "==", "user"),
-    orderBy("createdAt", "desc"),
     limit(100)
   );
 
-  let fallbackUnsubscribe: Unsubscribe | null = null;
-
-  const primaryUnsubscribe = onSnapshot(
-    indexedQuery,
+  return onSnapshot(
+    q,
     (snap) => {
       callback(
         sortNotificationsByCreatedAt(
@@ -521,40 +523,9 @@ export function subscribeUserNotifications(
       );
     },
     (error) => {
-      if (error.code !== "failed-precondition" || fallbackUnsubscribe) {
-        console.error("Failed to subscribe to indexed user notifications", error);
-        return;
-      }
-
-      const fallbackQuery = query(
-        collection(db, "notifications"),
-        where("source", "==", "user"),
-        limit(100)
-      );
-
-      fallbackUnsubscribe = onSnapshot(
-        fallbackQuery,
-        (snap) => {
-          callback(
-            sortNotificationsByCreatedAt(
-              snap.docs.map((doc) => mapNotification(doc.id, doc.data()))
-            )
-          );
-        },
-        (fallbackError) => {
-          console.error(
-            "Failed to subscribe to fallback user notifications",
-            fallbackError
-          );
-        }
-      );
+      console.error("Failed to subscribe to user notifications", error);
     }
   );
-
-  return () => {
-    primaryUnsubscribe();
-    fallbackUnsubscribe?.();
-  };
 }
 
 export async function createNotification(data: {
