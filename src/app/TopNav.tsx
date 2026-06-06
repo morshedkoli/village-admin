@@ -97,16 +97,6 @@ export default function TopNav({ onMenuToggle }: { onMenuToggle: () => void }) {
   );
   const unreadCount = unread.length;
 
-  // Clean up stale IDs that no longer exist
-  useEffect(() => {
-    const existingIds = new Set(notifications.map((n) => n.id));
-    const cleaned = new Set([...readIds].filter((id) => existingIds.has(id)));
-    if (cleaned.size !== readIds.size) {
-      setReadIds(cleaned);
-      persistReadIds(cleaned);
-    }
-  }, [notifications]); // eslint-disable-line react-hooks/exhaustive-deps
-
   // Close panel on outside click
   useEffect(() => {
     function handleClick(e: MouseEvent) {

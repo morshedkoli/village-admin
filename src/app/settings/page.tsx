@@ -25,7 +25,6 @@ import {
   User as UserIcon,
   Bell,
   Plus,
-  Trash2,
 } from "lucide-react";
 
 export default function SettingsPage() {

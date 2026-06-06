@@ -96,7 +96,7 @@ export default function LandingPageClient({ apkInfo }: { apkInfo: ApkInfo }) {
               {/* Download CTA */}
               <div className="flex flex-col items-center lg:items-start gap-3">
                 <a
-                  href="/apps/al_islah.apk"
+                  href="/apps/al_islah_v2.apk"
                   download
                   className="inline-flex items-center gap-2.5 px-5 py-3 bg-primary hover:bg-primary-dark text-white text-sm font-semibold rounded-md transition-colors"
                 >

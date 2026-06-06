@@ -28,7 +28,6 @@ export default function ProblemsPage() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [createLoading, setCreateLoading] = useState(false);
   const [createError, setCreateError] = useState("");
-  const [actionError, setActionError] = useState("");
   const [form, setForm] = useState({
     title: "",
     description: "",
@@ -111,12 +110,6 @@ export default function ProblemsPage() {
           Add Problem
         </button>
       </div>
-
-      {actionError && (
-        <div className="bg-danger-light border border-danger/20 text-danger rounded-xl px-4 py-3 text-sm animate-fade-in">
-          {actionError}
-        </div>
-      )}
 
       <div className="bg-white rounded-2xl border border-border overflow-hidden">
         {problems.length === 0 ? (

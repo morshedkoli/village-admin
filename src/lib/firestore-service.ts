@@ -223,7 +223,8 @@ export function subscribeProjects(
 export async function createProject(
   data: Omit<DevelopmentProject, "id">
 ): Promise<void> {
-  const { createdAt: _, ...rest } = data;
+  const rest = { ...data };
+  delete (rest as Partial<DevelopmentProject>).createdAt;
   await addDoc(collection(db, "projects"), {
     ...rest,
     createdAt: serverTimestamp(),
@@ -234,7 +235,9 @@ export async function updateProject(
   id: string,
   data: Partial<DevelopmentProject>
 ): Promise<void> {
-  const { id: _, createdAt: __, ...rest } = data;
+  const rest = { ...data };
+  delete (rest as Partial<DevelopmentProject>).id;
+  delete (rest as Partial<DevelopmentProject>).createdAt;
   await updateDoc(doc(db, "projects", id), rest as DocumentData);
 }
 
@@ -407,11 +410,8 @@ export function subscribeExpenses(
       callback(
         sortExpensesByDate(
           snap.docs
+            .filter((expenseDoc) => expenseDoc.data()?.type === "expense")
             .map((expenseDoc) => mapExpense(expenseDoc.id, expenseDoc.data()))
-            .filter((expenseDoc) => {
-              const raw = snap.docs.find((doc) => doc.id === expenseDoc.id)?.data();
-              return raw?.type === "expense";
-            })
         )
       );
     },

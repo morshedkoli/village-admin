@@ -129,6 +129,7 @@ export default function DonationsPage() {
   }, [donations]);
 
   const pendingDonations = donations.filter((d) => d.status === "Pending");
+  const filteredPendingDonations = filtered.filter((d) => d.status === "Pending");
   const pendingCount = pendingDonations.length;
   const pendingAmount = pendingDonations.reduce((s, d) => s + d.amount, 0);
   const approvedCount = donations.filter((d) => d.status === "Approved").length;
@@ -462,14 +463,14 @@ export default function DonationsPage() {
       </div>
 
       {/* Pending Donations Section */}
-      {pendingCount > 0 && statusFilter === "all" && (
+      {filteredPendingDonations.length > 0 && statusFilter === "all" && (
         <div className="bg-white rounded-2xl border-2 border-warning/30 overflow-hidden animate-fade-in">
           <div className="px-5 py-4 bg-warning-light/50 border-b border-warning/20 flex items-center justify-between">
             <div className="flex items-center gap-3">
               <Clock className="w-5 h-5 text-warning" />
               <div>
                 <h3 className="text-sm font-semibold text-text-primary">
-                  Pending Approval ({pendingCount})
+                  Pending Approval ({filteredPendingDonations.length})
                 </h3>
                 <p className="text-xs text-text-muted">
                   Total: {formatBDT(pendingAmount)} — Review and approve or
@@ -521,7 +522,7 @@ export default function DonationsPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border-light">
-                {pendingDonations.map((donation) => {
+                {filteredPendingDonations.map((donation) => {
                   const isLoading = actionLoading === donation.id;
                   return (
                     <tr

@@ -15,6 +15,7 @@ interface PaymentAccount {
  * Returns all active donation payment accounts for Flutter app consumption
  */
 export async function GET(_request: NextRequest) {
+  void _request;
   try {
     const adminDb = getAdminDb();
 

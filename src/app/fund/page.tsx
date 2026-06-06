@@ -70,7 +70,6 @@ export default function FundPage() {
 
   if (l1 || l2 || l3) return <LoadingSkeleton />;
 
-  const totalDonations = donations.reduce((s, d) => s + d.amount, 0);
   const totalAllocated = projects.reduce((s, p) => s + p.allocatedFunds, 0);
 
   return (
