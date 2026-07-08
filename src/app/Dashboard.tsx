@@ -24,6 +24,8 @@ import {
   AlertTriangle,
   Users,
   ArrowUpRight,
+  Smartphone,
+  Download,
 } from "lucide-react";
 import {
   BarChart,
@@ -110,13 +112,23 @@ export default function Dashboard() {
   return (
     <div className="space-y-8">
       {/* Page header */}
-      <div>
-        <h1 className="text-[26px] font-semibold text-text-primary tracking-tight">
-          Dashboard
-        </h1>
-        <p className="text-sm text-text-secondary mt-1">
-          Overview of your village operations
-        </p>
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="text-[26px] font-semibold text-text-primary tracking-tight">
+            Dashboard
+          </h1>
+          <p className="text-sm text-text-secondary mt-1">
+            Overview of your village operations
+          </p>
+        </div>
+        <a
+          href="/apps/al_islah_v2.apk"
+          download
+          className="inline-flex items-center gap-2.5 px-5 py-2.5 bg-primary text-white hover:bg-primary-dark text-xs font-semibold rounded-xl transition-all shadow-sm shadow-primary/10 hover:shadow-md"
+        >
+          <Download className="w-4 h-4" />
+          Download Android App (APK)
+        </a>
       </div>
 
       {/* Stat cards */}

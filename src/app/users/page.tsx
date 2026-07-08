@@ -25,6 +25,8 @@ import {
   Home,
   Plus,
   Save,
+  KeyRound,
+  LogIn,
 } from "lucide-react";
 
 export default function UsersPage() {
@@ -47,7 +49,10 @@ export default function UsersPage() {
     bloodGroup: "",
     dateOfBirth: "",
     photoUrl: "",
+    password: "",
+    confirmPassword: "",
   });
+  const [showPassword, setShowPassword] = useState(false);
 
   const filtered = useMemo(() => {
     if (!search) return users;
@@ -73,6 +78,8 @@ export default function UsersPage() {
       bloodGroup: "",
       dateOfBirth: "",
       photoUrl: "",
+      password: "",
+      confirmPassword: "",
     });
     setCreateError("");
   };
@@ -95,6 +102,16 @@ export default function UsersPage() {
       return;
     }
 
+    if (form.password && form.password.length < 6) {
+      setCreateError("Password must be at least 6 characters.");
+      return;
+    }
+
+    if (form.password && form.password !== form.confirmPassword) {
+      setCreateError("Passwords do not match.");
+      return;
+    }
+
     setCreateLoading(true);
     setCreateError("");
 
@@ -106,7 +123,19 @@ export default function UsersPage() {
           "Content-Type": "application/json",
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify(form),
+        body: JSON.stringify({
+          name: form.name,
+          profession: form.profession,
+          phone: form.phone,
+          village: form.village,
+          email: form.email,
+          address: form.address,
+          nidNumber: form.nidNumber,
+          bloodGroup: form.bloodGroup,
+          dateOfBirth: form.dateOfBirth,
+          photoUrl: form.photoUrl,
+          ...(form.password ? { password: form.password } : {}),
+        }),
       });
 
       const data = (await res.json().catch(() => ({}))) as { error?: string };
@@ -167,91 +196,61 @@ export default function UsersPage() {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-border bg-background/50">
-                  <th className="px-5 py-3.5 text-left text-xs font-semibold text-text-secondary uppercase tracking-wider">
-                    Citizen
-                  </th>
-                  <th className="px-5 py-3.5 text-left text-xs font-semibold text-text-secondary uppercase tracking-wider">
-                    Profession
-                  </th>
-                  <th className="px-5 py-3.5 text-left text-xs font-semibold text-text-secondary uppercase tracking-wider">
-                    Phone
-                  </th>
-                  <th className="px-5 py-3.5 text-left text-xs font-semibold text-text-secondary uppercase tracking-wider">
-                    Village
-                  </th>
-                  <th className="px-5 py-3.5 text-right text-xs font-semibold text-text-secondary uppercase tracking-wider">
-                    Actions
-                  </th>
+                  <th className="px-5 py-3.5 text-left text-xs font-semibold text-text-secondary uppercase tracking-wider">Citizen</th>
+                  <th className="px-5 py-3.5 text-left text-xs font-semibold text-text-secondary uppercase tracking-wider">Profession</th>
+                  <th className="px-5 py-3.5 text-left text-xs font-semibold text-text-secondary uppercase tracking-wider">Phone</th>
+                  <th className="px-5 py-3.5 text-left text-xs font-semibold text-text-secondary uppercase tracking-wider">Village</th>
+                  <th className="px-5 py-3.5 text-left text-xs font-semibold text-text-secondary uppercase tracking-wider">Login Access</th>
+                  <th className="px-5 py-3.5 text-right text-xs font-semibold text-text-secondary uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border-light">
-                {filtered.map((user) => (
-                  <tr
-                    key={user.id}
-                    className="hover:bg-surface-hover/50 transition-colors"
-                  >
+                {filtered.map((u) => (
+                  <tr key={u.id} className="hover:bg-surface-hover/50 transition-colors">
                     <td className="px-5 py-4">
                       <div className="flex items-center gap-3">
-                        {user.photoUrl ? (
-                          <img
-                            src={user.photoUrl}
-                            alt=""
-                            className="w-9 h-9 rounded-full object-cover shrink-0 ring-2 ring-border"
-                          />
+                        {u.photoUrl ? (
+                          <img src={u.photoUrl} alt="" className="w-9 h-9 rounded-full object-cover shrink-0 ring-2 ring-border" />
                         ) : (
                           <div className="w-9 h-9 rounded-full bg-primary-light text-primary flex items-center justify-center text-sm font-semibold shrink-0">
-                            {user.name.charAt(0)}
+                            {u.name.charAt(0)}
                           </div>
                         )}
                         <div>
                           <div className="flex items-center gap-2">
-                            <p className="text-sm font-medium text-text-primary">
-                              {user.name}
-                            </p>
-                            {user.blocked && (
-                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-danger-light text-danger">
-                                Blocked
-                              </span>
+                            <p className="text-sm font-medium text-text-primary">{u.name}</p>
+                            {u.blocked && (
+                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-danger-light text-danger">Blocked</span>
                             )}
                           </div>
-                          {user.email && (
-                            <p className="text-xs text-text-muted">{user.email}</p>
-                          )}
+                          {u.email && <p className="text-xs text-text-muted">{u.email}</p>}
                         </div>
                       </div>
                     </td>
-                    <td className="px-5 py-4 text-sm text-text-secondary">
-                      {user.profession || "\u2014"}
-                    </td>
-                    <td className="px-5 py-4 text-sm text-text-secondary">
-                      {user.phone || "\u2014"}
-                    </td>
-                    <td className="px-5 py-4 text-sm text-text-secondary">
-                      {user.village || "\u2014"}
+                    <td className="px-5 py-4 text-sm text-text-secondary">{u.profession || "—"}</td>
+                    <td className="px-5 py-4 text-sm text-text-secondary">{u.phone || "—"}</td>
+                    <td className="px-5 py-4 text-sm text-text-secondary">{u.village || "—"}</td>
+                    <td className="px-5 py-4">
+                      {(u as { hasPassword?: boolean }).hasPassword ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium bg-success-light text-success">
+                          <LogIn className="w-3 h-3" />
+                          Can Login
+                        </span>
+                      ) : (
+                        <span className="text-xs text-text-muted">No login</span>
+                      )}
                     </td>
                     <td className="px-5 py-4">
                       <div className="flex items-center justify-end gap-1">
-                        <button
-                          onClick={() => setViewUser(user)}
-                          className="p-2 rounded-lg hover:bg-surface-hover text-text-muted hover:text-text-primary transition-colors"
-                          title="View Details"
-                        >
+                        <button onClick={() => setViewUser(u)} className="p-2 rounded-lg hover:bg-surface-hover text-text-muted hover:text-text-primary transition-colors" title="View Details">
                           <Eye className="w-4 h-4" />
                         </button>
                         <button
-                          onClick={() => setBlockTarget(user)}
-                          className={`p-2 rounded-lg transition-colors ${
-                            user.blocked
-                              ? "hover:bg-success-light text-text-muted hover:text-success"
-                              : "hover:bg-danger-light text-text-muted hover:text-danger"
-                          }`}
-                          title={user.blocked ? "Unblock" : "Block"}
+                          onClick={() => setBlockTarget(u)}
+                          className={`p-2 rounded-lg transition-colors ${u.blocked ? "hover:bg-success-light text-text-muted hover:text-success" : "hover:bg-danger-light text-text-muted hover:text-danger"}`}
+                          title={u.blocked ? "Unblock" : "Block"}
                         >
-                          {user.blocked ? (
-                            <ShieldCheck className="w-4 h-4" />
-                          ) : (
-                            <ShieldBan className="w-4 h-4" />
-                          )}
+                          {u.blocked ? <ShieldCheck className="w-4 h-4" /> : <ShieldBan className="w-4 h-4" />}
                         </button>
                       </div>
                     </td>
@@ -273,23 +272,15 @@ export default function UsersPage() {
           <div className="space-y-6">
             <div className="flex items-center gap-4">
               {viewUser.photoUrl ? (
-                <img
-                  src={viewUser.photoUrl}
-                  alt=""
-                  className="w-16 h-16 rounded-2xl object-cover ring-2 ring-border"
-                />
+                <img src={viewUser.photoUrl} alt="" className="w-16 h-16 rounded-2xl object-cover ring-2 ring-border" />
               ) : (
                 <div className="w-16 h-16 rounded-2xl bg-primary-light text-primary flex items-center justify-center text-xl font-bold">
                   {viewUser.name.charAt(0)}
                 </div>
               )}
               <div>
-                <h3 className="text-lg font-semibold text-text-primary">
-                  {viewUser.name}
-                </h3>
-                {viewUser.email && (
-                  <p className="text-sm text-text-secondary">{viewUser.email}</p>
-                )}
+                <h3 className="text-lg font-semibold text-text-primary">{viewUser.name}</h3>
+                {viewUser.email && <p className="text-sm text-text-secondary">{viewUser.email}</p>}
               </div>
             </div>
 
@@ -478,6 +469,52 @@ export default function UsersPage() {
               placeholder="https://example.com/photo.jpg"
               className="w-full px-4 py-2.5 rounded-xl border border-border bg-background text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
             />
+          </div>
+
+          {/* ── Login credentials section ── */}
+          <div className="border-t border-border pt-4">
+            <div className="flex items-center gap-2 mb-3">
+              <KeyRound className="w-4 h-4 text-primary" />
+              <h4 className="text-sm font-semibold text-text-primary">Login Access (Optional)</h4>
+            </div>
+            <p className="text-xs text-text-secondary mb-4 bg-primary/5 rounded-xl px-3 py-2">
+              Leave password blank to add the citizen as a directory entry only (no login). Provide a password to create a login account — the citizen can then sign in with their phone number + this password.
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-text-primary mb-1.5">
+                  Password
+                </label>
+                <div className="relative">
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    value={form.password}
+                    onChange={(e) => setForm((prev) => ({ ...prev, password: e.target.value }))}
+                    placeholder="Min. 6 characters"
+                    className="w-full px-4 py-2.5 pr-10 rounded-xl border border-border bg-background text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((s) => !s)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-primary"
+                  >
+                    <KeyRound className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-text-primary mb-1.5">
+                  Confirm Password
+                </label>
+                <input
+                  type={showPassword ? "text" : "password"}
+                  value={form.confirmPassword}
+                  onChange={(e) => setForm((prev) => ({ ...prev, confirmPassword: e.target.value }))}
+                  placeholder="Repeat password"
+                  className="w-full px-4 py-2.5 rounded-xl border border-border bg-background text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+                />
+              </div>
+            </div>
           </div>
 
           {createError && (

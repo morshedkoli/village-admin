@@ -34,7 +34,7 @@ function readApkInfo(): ApkInfo {
     // If the APK isn't present yet, leave defaults so the page still renders.
   }
 
-  return { sizeMB, updatedAt, version: "1.0.0" };
+  return { sizeMB, updatedAt, version: "2.0.0" };
 }
 
 export default function LandingPage() {
