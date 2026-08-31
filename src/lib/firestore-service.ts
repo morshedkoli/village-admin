@@ -174,13 +174,6 @@ export async function approveDonation(id: string): Promise<void> {
       reference: donorName,
       createdAt: serverTimestamp(),
     });
-    tx.set(doc(collection(db, "notifications")), {
-      title: "নতুন অনুদান",
-      body: `${donorName} ৳${amount} অনুদান দিয়েছেন`,
-      type: "donation",
-      source: "admin",
-      createdAt: serverTimestamp(),
-    });
   });
 }
 
